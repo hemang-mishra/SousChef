@@ -1,41 +1,31 @@
 package com.souschef
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Restaurant
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.souschef.domain.model.User
-import com.souschef.feature.auth.presentation.components.SecondaryButton
-import com.souschef.ui.theme.GoldMuted
+import com.souschef.ui.components.SecondaryButton
+import com.souschef.ui.theme.GoldVibrant
 
 /**
- * Dashboard screen - main landing page after authentication.
- * This is a placeholder that will be expanded with actual features.
+ * Dashboard screen — main landing page after authentication (Phase 1+).
+ * This is a placeholder that will be replaced with the full Home screen in Phase 7.
  */
 @Composable
 fun DashboardScreen(
-    user: User?,
+    displayName: String? = null,
+    email: String? = null,
     onSignOut: () -> Unit,
     onNavigateToDesignTest: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -43,7 +33,7 @@ fun DashboardScreen(
             imageVector = Icons.Outlined.Restaurant,
             contentDescription = null,
             modifier = Modifier.size(80.dp),
-            tint = GoldMuted
+            tint = GoldVibrant
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -58,8 +48,8 @@ fun DashboardScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = user?.displayName?.let { "Hello, $it!" }
-                ?: user?.email?.let { "Signed in as $it" }
+            text = displayName?.let { "Hello, $it!" }
+                ?: email?.let { "Signed in as $it" }
                 ?: "You're signed in!",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -68,16 +58,10 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        SecondaryButton(
-            text = "View Design System",
-            onClick = onNavigateToDesignTest
-        )
+        SecondaryButton(text = "View Design System", onClick = onNavigateToDesignTest)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SecondaryButton(
-            text = "Sign Out",
-            onClick = onSignOut
-        )
+        SecondaryButton(text = "Sign Out", onClick = onSignOut)
     }
 }
