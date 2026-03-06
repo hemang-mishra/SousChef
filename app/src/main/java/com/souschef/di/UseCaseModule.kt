@@ -1,15 +1,19 @@
 package com.souschef.di
 
+import com.souschef.usecases.ingredient.AddGlobalIngredientUseCase
+import com.souschef.usecases.ingredient.GetIngredientsUseCase
+import com.souschef.usecases.ingredient.UpdateGlobalIngredientUseCase
+import com.souschef.usecases.recipe.CreateRecipeUseCase
+import com.souschef.usecases.recipe.PublishRecipeUseCase
 import org.koin.dsl.module
 
 /**
- * Use-case module — register use-case classes as `single`.
- *
- * Example (Phase 1+):
- *   single { CreateRecipeUseCase(get(), get()) }
- *   single { GenerateRecipeStepsUseCase(get()) }
+ * Use-case module — register use-case classes as `single` (stateless).
  */
 val useCaseModule = module {
-    // Use cases added in Phase 1+
+    single { CreateRecipeUseCase(get()) }
+    single { PublishRecipeUseCase(get()) }
+    single { AddGlobalIngredientUseCase(get()) }
+    single { UpdateGlobalIngredientUseCase(get()) }
+    single { GetIngredientsUseCase(get()) }
 }
-

@@ -9,26 +9,69 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.souschef.model.auth.UserProfile
+import com.souschef.ui.components.FullScreenLoader
+import com.souschef.ui.screens.auth.login.LoginScreen
+import com.souschef.ui.screens.auth.signup.SignUpScreen
 import com.souschef.ui.screens.designtest.DesignTestScreen
-
+import com.souschef.ui.screens.home.HomeScreen
+import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientScreen
+import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientViewModel
+import com.souschef.ui.screens.ingredient.library.IngredientLibraryScreen
+import com.souschef.ui.screens.recipe.create.CreateRecipeScreen
+import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
+import com.souschef.ui.theme.SousChefTheme
+import com.souschef.ui.viewmodels.AppViewModel
+import org.koin.compose.koinInject
+import org.koin.core.parameter.parametersOf
 
 /**
  * Root navigation host for SousChef.
- * Uses Navigation 3 (androidx.navigation3 v1.0.1).
  *
- * Rules:
- * - New destinations: add to [Screens] sealed interface, then add an `entry<>` block here.
- * - Back: `backstack.removeAt(backstack.size - 1)`
- * - Forward: `backstack.add(destination)`
+ * Auth-aware routing:
+ * - Shows a splash/loading while initial auth check is in progress.
+ * - If logged in → NavHomeRoute.
+ * - If not logged in → NavLoginRoute.
  */
 @Composable
 fun AppNavigation() {
-    val backstack = rememberNavBackStack(Screens.NavDesignTestRoute)
+    val appViewModel: AppViewModel = koinInject()
+    val isLoggedIn by appViewModel.isLoggedIn.collectAsState()
+    val authChecked by appViewModel.authChecked.collectAsState()
+
+    // Show loading until initial auth check completes
+    if (!authChecked) {
+        SousChefTheme {
+            FullScreenLoader(message = "Loading…")
+        }
+        return
+    }
+
+    val startDestination: Screens = if (isLoggedIn) Screens.NavHomeRoute else Screens.NavLoginRoute
+    val backstack = rememberNavBackStack(startDestination)
+
+    // When auth state changes after initial load, redirect
+    LaunchedEffect(isLoggedIn, authChecked) {
+        if (!authChecked) return@LaunchedEffect
+        val currentKey = backstack.lastOrNull()
+        if (isLoggedIn && (currentKey is Screens.NavLoginRoute || currentKey is Screens.NavSignUpRoute)) {
+            // Logged in but on auth screen — go to Home
+            backstack.clear()
+            backstack.add(Screens.NavHomeRoute)
+        } else if (!isLoggedIn && currentKey !is Screens.NavLoginRoute && currentKey !is Screens.NavSignUpRoute && currentKey !is Screens.NavDesignTestRoute) {
+            // Logged out — go to Login
+            backstack.clear()
+            backstack.add(Screens.NavLoginRoute)
+        }
+    }
 
     NavDisplay(
         backStack = backstack,
@@ -46,6 +89,59 @@ fun AppNavigation() {
         },
         entryProvider = entryProvider {
 
+            // ── Auth ─────────────────────────────────────
+            entry<Screens.NavLoginRoute> {
+                LoginScreen(
+                    onNavigateToSignUp = { backstack.add(Screens.NavSignUpRoute) },
+                    onLoginSuccess = { profile ->
+                        appViewModel.setCurrentUser(profile)
+                        backstack.clear()
+                        backstack.add(Screens.NavHomeRoute)
+                    }
+                )
+            }
+
+            entry<Screens.NavSignUpRoute> {
+                SignUpScreen(
+                    onNavigateToLogin = {
+                        if (backstack.size > 1) {
+                            backstack.removeAt(backstack.size - 1)
+                        }
+                    },
+                    onSignUpSuccess = { profile ->
+                        appViewModel.setCurrentUser(profile)
+                        backstack.clear()
+                        backstack.add(Screens.NavHomeRoute)
+                    }
+                )
+            }
+
+            // ── Home ─────────────────────────────────────
+            entry<Screens.NavHomeRoute> {
+                val currentUser by appViewModel.currentUser.collectAsState()
+                HomeScreen(
+                    displayName = currentUser?.displayName,
+                    onCreateRecipe = { backstack.add(Screens.NavCreateRecipeRoute) },
+                    onSignOut = { appViewModel.signOut() },
+                    onDesignTest = { backstack.add(Screens.NavDesignTestRoute) },
+                    onIngredientLibrary = { backstack.add(Screens.NavIngredientLibraryRoute) }
+                )
+            }
+
+            // ── Create Recipe ────────────────────────────
+            entry<Screens.NavCreateRecipeRoute> {
+                val currentUser = appViewModel.currentUser.value ?: UserProfile()
+                val viewModel: CreateRecipeViewModel = koinInject { parametersOf(currentUser) }
+                CreateRecipeScreen(
+                    onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    onRecipeSaved = { recipeId ->
+                        // Pop back to home after save
+                        if (backstack.size > 1) backstack.removeAt(backstack.size - 1)
+                    },
+                    viewModel = viewModel
+                )
+            }
+
             // ── Design Test ──────────────────────────────
             entry<Screens.NavDesignTestRoute> {
                 DesignTestScreen(
@@ -53,24 +149,37 @@ fun AppNavigation() {
                 )
             }
 
-            // ── Auth (Phase 1) ────────────────────────────
-            entry<Screens.NavLoginRoute> { PlaceholderScreen("Login — Coming in Phase 1") }
-            entry<Screens.NavSignUpRoute> { PlaceholderScreen("Sign Up — Coming in Phase 1") }
+            // ── Ingredient Library (Phase 1A) ────────────
+            entry<Screens.NavIngredientLibraryRoute> {
+                IngredientLibraryScreen(
+                    onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    onAddIngredient = { backstack.add(Screens.NavAddEditIngredientRoute(ingredientId = null)) },
+                    onEditIngredient = { id -> backstack.add(Screens.NavAddEditIngredientRoute(ingredientId = id)) }
+                )
+            }
 
-            // ── Home (Phase 7) ─────────────────────────────
-            entry<Screens.NavHomeRoute> { PlaceholderScreen("Home Feed — Coming in Phase 7") }
+            entry<Screens.NavAddEditIngredientRoute> { route ->
+                val currentUser = appViewModel.currentUser.value ?: UserProfile()
+                val viewModel: AddEditIngredientViewModel = koinInject {
+                    parametersOf(currentUser, route.ingredientId)
+                }
+                AddEditIngredientScreen(
+                    onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    onSaved = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    viewModel = viewModel
+                )
+            }
 
-            // ── Recipe (Phase 2+) ──────────────────────────
-            entry<Screens.NavCreateRecipeRoute> { PlaceholderScreen("Create Recipe — Phase 2") }
+            // ── Recipe Detail / Overview (Phase 3) ───────
             entry<Screens.NavRecipeDetailRoute> { PlaceholderScreen("Recipe Detail — Phase 3") }
             entry<Screens.NavRecipeOverviewRoute> { PlaceholderScreen("Recipe Overview — Phase 3") }
             entry<Screens.NavCookingModeRoute> { PlaceholderScreen("Cooking Mode — Phase 4") }
 
-            // ── Saved / Profile (Phase 7) ──────────────────
+            // ── Saved / Profile (Phase 7) ────────────────
             entry<Screens.NavSavedRecipesRoute> { PlaceholderScreen("Saved Recipes — Phase 7") }
             entry<Screens.NavProfileRoute> { PlaceholderScreen("Profile — Phase 7") }
 
-            // ── Admin (Phase 8) ────────────────────────────
+            // ── Admin (Phase 8) ──────────────────────────
             entry<Screens.NavAdminRoute> { PlaceholderScreen("Admin Panel — Phase 8") }
         }
     )
@@ -79,7 +188,10 @@ fun AppNavigation() {
 @Composable
 private fun PlaceholderScreen(label: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = label, style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
     }
 }
