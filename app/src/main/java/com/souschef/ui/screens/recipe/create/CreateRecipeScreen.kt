@@ -2,10 +2,14 @@ package com.souschef.ui.screens.recipe.create
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -41,10 +46,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -67,6 +70,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -74,12 +80,20 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.model.recipe.RecipeIngredient
-import com.souschef.ui.components.GhostButton
-import com.souschef.ui.components.PrimaryButton
-import com.souschef.ui.components.SecondaryButton
-import com.souschef.ui.components.SectionHeader
+import com.souschef.ui.components.DietaryTag
+import com.souschef.ui.components.IngredientRow
+import com.souschef.ui.components.PremiumButton
+import com.souschef.ui.components.PremiumDivider
+import com.souschef.ui.components.PremiumDottedDivider
+import com.souschef.ui.components.PremiumOutlinedButton
+import com.souschef.ui.components.PremiumSectionHeader
+import com.souschef.ui.components.PremiumTextButton
+import com.souschef.ui.components.SearchField
 import com.souschef.ui.components.SousChefFilterChip
 import com.souschef.ui.components.SousChefTextField
+import com.souschef.ui.components.StandardCard
+import com.souschef.ui.theme.AppColors
+import com.souschef.ui.theme.CustomShapes
 import com.souschef.ui.theme.SousChefTheme
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -168,14 +182,24 @@ fun CreateRecipeScreenLayout(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Create Recipe", style = MaterialTheme.typography.titleMedium) },
+                title = {
+                    Text(
+                        "Create Recipe",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = AppColors.textPrimary()
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = if (uiState.canGoBack) onPreviousStep else onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Back",
+                            tint = AppColors.textPrimary()
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = Color.Transparent
                 )
             )
         }
@@ -183,13 +207,14 @@ fun CreateRecipeScreenLayout(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
         ) {
             // Step indicator
-            StepIndicator(
+            PremiumStepIndicator(
                 currentStep = uiState.currentStep,
                 labels = uiState.stepLabels,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
             )
 
             // Content — animated transition between steps
@@ -233,21 +258,22 @@ fun CreateRecipeScreenLayout(
 
             // Bottom navigation buttons
             if (uiState.canGoBack || uiState.canGoNext) {
+                PremiumDivider()
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (uiState.canGoBack) {
-                        SecondaryButton(
+                        PremiumOutlinedButton(
                             text = "Back",
                             onClick = onPreviousStep,
                             modifier = Modifier.weight(1f)
                         )
                     }
                     if (uiState.canGoNext) {
-                        PrimaryButton(
+                        PremiumButton(
                             text = "Next",
                             onClick = onNextStep,
                             modifier = Modifier.weight(1f)
@@ -260,26 +286,88 @@ fun CreateRecipeScreenLayout(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Step Indicator
+// Premium Step Indicator
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun StepIndicator(
+private fun PremiumStepIndicator(
     currentStep: Int,
     labels: List<String>,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        LinearProgressIndicator(
-            progress = { (currentStep + 1f) / labels.size },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp)),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+    Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // Dots + connecting lines
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            labels.forEachIndexed { index, _ ->
+                val isCompleted = index < currentStep
+                val isCurrent = index == currentStep
+
+                val dotColor by animateColorAsState(
+                    targetValue = when {
+                        isCompleted -> AppColors.gold()
+                        isCurrent -> AppColors.gold()
+                        else -> AppColors.border()
+                    },
+                    animationSpec = tween(300),
+                    label = "stepDotColor"
+                )
+
+                // Step dot
+                Box(
+                    modifier = Modifier
+                        .size(if (isCurrent) 36.dp else 28.dp)
+                        .clip(CircleShape)
+                        .then(
+                            if (isCurrent) Modifier
+                                .border(2.dp, AppColors.gold(), CircleShape)
+                                .background(AppColors.gold().copy(alpha = 0.12f))
+                            else if (isCompleted) Modifier.background(dotColor)
+                            else Modifier
+                                .border(1.5.dp, AppColors.border(), CircleShape)
+                                .background(Color.Transparent)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isCompleted) {
+                        Icon(
+                            Icons.Outlined.Check,
+                            contentDescription = "Completed",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isCurrent) AppColors.gold() else AppColors.textTertiary()
+                        )
+                    }
+                }
+
+                // Connecting line (between dots)
+                if (index < labels.lastIndex) {
+                    val lineColor by animateColorAsState(
+                        targetValue = if (index < currentStep) AppColors.gold() else AppColors.border(),
+                        animationSpec = tween(300),
+                        label = "stepLineColor"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.dp)
+                            .padding(horizontal = 8.dp)
+                            .background(lineColor, RoundedCornerShape(1.dp))
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
+        // Labels
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -289,8 +377,13 @@ private fun StepIndicator(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = if (index == currentStep) FontWeight.Bold else FontWeight.Normal,
-                    color = if (index <= currentStep) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = when {
+                        index < currentStep -> AppColors.gold()
+                        index == currentStep -> AppColors.textPrimary()
+                        else -> AppColors.textTertiary()
+                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -318,8 +411,8 @@ private fun Step1Details(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Spacer(Modifier.height(4.dp))
 
@@ -340,8 +433,10 @@ private fun Step1Details(
             maxLines = 5
         )
 
+        PremiumDivider()
+
         // Serving Size
-        SectionHeader(title = "Serving Size")
+        PremiumSectionHeader(title = "Serving Size")
         ServingStepper(
             label = "Base servings",
             value = uiState.baseServingSize,
@@ -352,18 +447,26 @@ private fun Step1Details(
 
         // Min/Max restrictions
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Minimum servings",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Minimum servings",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppColors.textPrimary()
+                )
+                Text(
+                    "Set a lower limit for this recipe",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.textTertiary()
+                )
+            }
             Switch(
                 checked = uiState.useMinServing,
                 onCheckedChange = onUseMinServingChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                    checkedThumbColor = AppColors.gold(),
+                    checkedTrackColor = AppColors.gold().copy(alpha = 0.3f),
+                    uncheckedThumbColor = AppColors.textTertiary(),
+                    uncheckedTrackColor = AppColors.border()
                 )
             )
         }
@@ -378,18 +481,26 @@ private fun Step1Details(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Maximum servings",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Maximum servings",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppColors.textPrimary()
+                )
+                Text(
+                    "Set an upper limit for this recipe",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.textTertiary()
+                )
+            }
             Switch(
                 checked = uiState.useMaxServing,
                 onCheckedChange = onUseMaxServingChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                    checkedThumbColor = AppColors.gold(),
+                    checkedTrackColor = AppColors.gold().copy(alpha = 0.3f),
+                    uncheckedThumbColor = AppColors.textTertiary(),
+                    uncheckedTrackColor = AppColors.border()
                 )
             )
         }
@@ -403,8 +514,10 @@ private fun Step1Details(
             )
         }
 
+        PremiumDivider()
+
         // Tags
-        SectionHeader(title = "Tags")
+        PremiumSectionHeader(title = "Tags")
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -418,7 +531,7 @@ private fun Step1Details(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -443,7 +556,7 @@ private fun ServingStepper(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = AppColors.textSecondary()
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(
@@ -452,21 +565,31 @@ private fun ServingStepper(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .border(
+                            1.dp,
+                            if (value > min) AppColors.gold() else AppColors.border(),
+                            CircleShape
+                        )
+                        .background(
+                            if (value > min) AppColors.gold().copy(alpha = 0.08f) else Color.Transparent
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("−", style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "\u2212",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (value > min) AppColors.gold() else AppColors.textTertiary()
+                    )
                 }
             }
             Text(
                 text = value.toString(),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.width(40.dp),
+                color = AppColors.textPrimary(),
+                modifier = Modifier.width(48.dp),
                 textAlign = TextAlign.Center
             )
             IconButton(
@@ -475,13 +598,23 @@ private fun ServingStepper(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .border(
+                            1.dp,
+                            if (value < max) AppColors.gold() else AppColors.border(),
+                            CircleShape
+                        )
+                        .background(
+                            if (value < max) AppColors.gold().copy(alpha = 0.08f) else Color.Transparent
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("+", style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "+",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (value < max) AppColors.gold() else AppColors.textTertiary()
+                    )
                 }
             }
         }
@@ -511,28 +644,43 @@ private fun Step2Ingredients(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 24.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            SectionHeader(title = "Ingredients (${ingredients.size})")
-            IconButton(onClick = { showBottomSheet = true }) {
-                Icon(
-                    Icons.Outlined.Add,
-                    contentDescription = "Add ingredient",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        PremiumSectionHeader(
+            title = "Ingredients",
+            action = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (ingredients.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(AppColors.gold().copy(alpha = 0.12f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "${ingredients.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = AppColors.gold()
+                            )
+                        }
+                    }
+                    IconButton(onClick = { showBottomSheet = true }) {
+                        Icon(
+                            Icons.Outlined.Add,
+                            contentDescription = "Add ingredient",
+                            tint = AppColors.gold()
+                        )
+                    }
+                }
             }
-        }
+        )
 
         if (ingredientError != null) {
             Text(
                 text = ingredientError,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = AppColors.error(),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
@@ -545,26 +693,40 @@ private fun Step2Ingredients(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Outlined.Restaurant,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                    )
-                    Spacer(Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(AppColors.gold().copy(alpha = 0.08f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.Restaurant,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = AppColors.gold().copy(alpha = 0.5f)
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
                     Text(
                         "No ingredients yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.titleMedium,
+                        color = AppColors.textSecondary()
                     )
-                    Spacer(Modifier.height(8.dp))
-                    GhostButton(text = "Tap + to add", onClick = { showBottomSheet = true })
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Add ingredients from the library",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppColors.textTertiary()
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    PremiumTextButton(text = "Tap + to add", onClick = { showBottomSheet = true })
                 }
             }
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 itemsIndexed(ingredients, key = { _, it -> it.globalIngredientId }) { _, ingredient ->
                     val globalIngredient = globalMap[ingredient.globalIngredientId]
@@ -576,7 +738,7 @@ private fun Step2Ingredients(
                 }
                 item {
                     Spacer(Modifier.height(4.dp))
-                    SecondaryButton(
+                    PremiumOutlinedButton(
                         text = "Add Another Ingredient",
                         onClick = { showBottomSheet = true },
                         leadingIcon = {
@@ -587,6 +749,7 @@ private fun Step2Ingredients(
                             )
                         }
                     )
+                    Spacer(Modifier.height(16.dp))
                 }
             }
         }
@@ -596,7 +759,8 @@ private fun Step2Ingredients(
         ModalBottomSheet(
             onDismissRequest = { showBottomSheet = false },
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = AppColors.cardBackground(),
+            shape = CustomShapes.TopRounded,
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
             PickIngredientBottomSheet(
@@ -632,34 +796,45 @@ private fun RecipeIngredientCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        colors = CardDefaults.cardColors(containerColor = AppColors.cardBackground()),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, AppColors.border())
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .drawBehind {
+                    // Left gold accent line
+                    drawLine(
+                        color = Color(0xFFFFB800),
+                        start = Offset(0f, size.height * 0.2f),
+                        end = Offset(0f, size.height * 0.8f),
+                        strokeWidth = 3.dp.toPx()
+                    )
+                }
+                .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = ingredientName,
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AppColors.textPrimary(),
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "${ingredient.quantity} ${ingredient.unit}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppColors.textTertiary()
                 )
             }
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Outlined.Delete,
                     contentDescription = "Remove",
-                    tint = MaterialTheme.colorScheme.error
+                    tint = AppColors.error(),
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -694,22 +869,17 @@ private fun PickIngredientBottomSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 24.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (selectedIngredient == null) {
             // ── Stage 1: Search & Pick ──
-            Text(
-                "Select Ingredient",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
-            )
+            PremiumSectionHeader(title = "Select Ingredient")
 
-            SousChefTextField(
+            SearchField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = "Search ingredients..."
+                placeholder = "Search ingredients..."
             )
 
             if (filtered.isEmpty()) {
@@ -721,43 +891,52 @@ private fun PickIngredientBottomSheet(
                         text = if (globalIngredients.isEmpty()) "No ingredients in the library yet.\nAdd some from the Ingredient Library screen."
                                else "No matching ingredients found.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppColors.textTertiary(),
                         textAlign = TextAlign.Center
                     )
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.height(300.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(filtered, key = { it.ingredientId }) { ingredient ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
                                 .clickable {
                                     selectedIngredient = ingredient
                                     selectedUnit = ingredient.defaultUnit
                                 }
-                                .padding(vertical = 10.dp),
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.Outlined.Restaurant,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                            )
-                            Spacer(Modifier.width(12.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(AppColors.gold().copy(alpha = 0.08f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Restaurant,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = AppColors.gold().copy(alpha = 0.7f)
+                                )
+                            }
+                            Spacer(Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = ingredient.name,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = AppColors.textPrimary()
                                 )
                                 Text(
                                     text = ingredient.defaultUnit,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = AppColors.textTertiary()
                                 )
                             }
                         }
@@ -766,19 +945,14 @@ private fun PickIngredientBottomSheet(
             }
 
             Spacer(Modifier.height(8.dp))
-            SecondaryButton(text = "Cancel", onClick = onDismiss)
+            PremiumTextButton(text = "Cancel", onClick = onDismiss)
             Spacer(Modifier.height(16.dp))
 
         } else {
             // ── Stage 2: Enter Quantity ──
             val sel = selectedIngredient!!
 
-            Text(
-                "Add ${sel.name}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
-            )
+            PremiumSectionHeader(title = "Add ${sel.name}")
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -803,7 +977,8 @@ private fun PickIngredientBottomSheet(
                             IconButton(onClick = { unitExpanded = !unitExpanded }) {
                                 Icon(
                                     if (unitExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                                    contentDescription = "Select unit"
+                                    contentDescription = "Select unit",
+                                    tint = AppColors.textSecondary()
                                 )
                             }
                         },
@@ -823,24 +998,24 @@ private fun PickIngredientBottomSheet(
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            PremiumDivider()
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                SecondaryButton(
+                PremiumOutlinedButton(
                     text = "Back",
                     onClick = { selectedIngredient = null; quantityText = ""; quantityError = null },
                     modifier = Modifier.weight(1f)
                 )
-                PrimaryButton(
+                PremiumButton(
                     text = "Add",
                     onClick = {
                         val qty = quantityText.toDoubleOrNull()
                         if (qty == null || qty <= 0) {
                             quantityError = "Enter a valid quantity"
-                            return@PrimaryButton
+                            return@PremiumButton
                         }
                         onSave(
                             RecipeIngredient(
@@ -862,6 +1037,7 @@ private fun PickIngredientBottomSheet(
 // Step 3: Review & Save
 // ─────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Step3Review(
     uiState: CreateRecipeUiState,
@@ -875,23 +1051,23 @@ private fun Step3Review(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Spacer(Modifier.height(4.dp))
 
-        // Summary card
+        // Summary card — glass effect
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape = CustomShapes.GlassCard,
+            colors = CardDefaults.cardColors(containerColor = AppColors.glassBackground()),
+            border = BorderStroke(0.5.dp, AppColors.glassBorder())
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text(
                     text = uiState.title.ifBlank { "Untitled Recipe" },
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AppColors.textPrimary(),
                     fontWeight = FontWeight.Bold
                 )
                 if (uiState.description.isNotBlank()) {
@@ -899,13 +1075,13 @@ private fun Step3Review(
                     Text(
                         text = uiState.description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppColors.textSecondary(),
                         maxLines = 3
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
+                PremiumDottedDivider()
+                Spacer(Modifier.height(16.dp))
 
                 ReviewRow("Base Servings", uiState.baseServingSize.toString())
                 uiState.minServingSize?.let { ReviewRow("Min Servings", it.toString()) }
@@ -913,46 +1089,33 @@ private fun Step3Review(
                 ReviewRow("Ingredients", uiState.ingredients.size.toString())
 
                 if (uiState.selectedTags.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = uiState.selectedTags.joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(Modifier.height(12.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        uiState.selectedTags.forEach { tag ->
+                            DietaryTag(text = tag, color = tagColor(tag))
+                        }
+                    }
                 }
             }
         }
 
         // Ingredient list preview
         if (uiState.ingredients.isNotEmpty()) {
-            SectionHeader(title = "Ingredients")
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
+            PremiumSectionHeader(title = "Ingredients")
+            StandardCard {
                 Column {
                     uiState.ingredients.forEachIndexed { index, ingredient ->
                         val name = globalMap[ingredient.globalIngredientId]?.name ?: "Unknown"
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                "${ingredient.quantity} ${ingredient.unit}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        IngredientRow(
+                            name = name,
+                            quantity = ingredient.quantity.toString(),
+                            unit = ingredient.unit
+                        )
                         if (index < uiState.ingredients.lastIndex) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            PremiumDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         }
                     }
                 }
@@ -962,14 +1125,14 @@ private fun Step3Review(
         Spacer(Modifier.height(8.dp))
 
         // Save buttons
-        SecondaryButton(
-            text = "Save as Draft",
+        PremiumOutlinedButton(
+            text = "Save for Later",
             onClick = { onSave(false) },
             isLoading = uiState.isLoading
         )
 
-        PrimaryButton(
-            text = "Save & Publish",
+        PremiumButton(
+            text = "Publish Recipe",
             onClick = { onSave(true) },
             isLoading = uiState.isLoading
         )
@@ -978,19 +1141,32 @@ private fun Step3Review(
     }
 }
 
+/** Maps recipe tags to appropriate accent colors */
+@Composable
+private fun tagColor(tag: String): Color = when {
+    tag.contains("Vegetarian") || tag.contains("Vegan") || tag.contains("Healthy") -> AppColors.accentGreen()
+    tag.contains("Spicy") || tag.contains("BBQ") -> AppColors.accentTerracotta()
+    tag.contains("Italian") || tag.contains("French") -> AppColors.accentBurgundy()
+    tag.contains("Indian") || tag.contains("Thai") || tag.contains("Mexican") || tag.contains("Japanese") -> AppColors.accentTeal()
+    tag.contains("Quick") -> AppColors.gold()
+    tag.contains("Gluten-Free") || tag.contains("Nut-Free") || tag.contains("Dairy-Free") -> AppColors.accentOlive()
+    tag.contains("Dessert") -> AppColors.accentTerracotta()
+    else -> AppColors.textTertiary()
+}
+
 @Composable
 private fun ReviewRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+            color = AppColors.textTertiary())
         Text(value, style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface)
+            color = AppColors.textPrimary())
     }
 }
 
