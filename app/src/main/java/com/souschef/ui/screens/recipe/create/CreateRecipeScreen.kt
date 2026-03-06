@@ -232,7 +232,7 @@ fun CreateRecipeScreenLayout(
             }
 
             // Bottom navigation buttons
-            if (uiState.currentStep < 2) {
+            if (uiState.canGoBack || uiState.canGoNext) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -246,11 +246,13 @@ fun CreateRecipeScreenLayout(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    PrimaryButton(
-                        text = "Next",
-                        onClick = onNextStep,
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (uiState.canGoNext) {
+                        PrimaryButton(
+                            text = "Next",
+                            onClick = onNextStep,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -572,6 +574,20 @@ private fun Step2Ingredients(
                         onDelete = { onRemoveIngredient(ingredient.globalIngredientId) }
                     )
                 }
+                item {
+                    Spacer(Modifier.height(4.dp))
+                    SecondaryButton(
+                        text = "Add Another Ingredient",
+                        onClick = { showBottomSheet = true },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Outlined.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    )
+                }
             }
         }
     }
@@ -693,7 +709,7 @@ private fun PickIngredientBottomSheet(
             SousChefTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = "Search ingredients…"
+                label = "Search ingredients..."
             )
 
             if (filtered.isEmpty()) {
