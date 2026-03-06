@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -30,7 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -48,8 +48,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -62,7 +60,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -75,7 +72,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.souschef.model.recipe.Ingredient
+import com.souschef.model.ingredient.GlobalIngredient
+import com.souschef.model.recipe.RecipeIngredient
 import com.souschef.ui.components.GhostButton
 import com.souschef.ui.components.PrimaryButton
 import com.souschef.ui.components.SecondaryButton
@@ -85,7 +83,6 @@ import com.souschef.ui.components.SousChefTextField
 import com.souschef.ui.theme.SousChefTheme
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import java.util.UUID
 
 // ── Predefined tags ─────────────────────────────────────────
 val RECIPE_TAGS = listOf(
@@ -95,7 +92,7 @@ val RECIPE_TAGS = listOf(
     "🍖 BBQ", "🌾 Gluten-Free", "🥜 Nut-Free", "🧀 Dairy-Free"
 )
 
-val UNIT_OPTIONS = listOf("grams", "ml", "tsp", "tbsp", "cups", "pieces", "oz", "lbs", "kg", "L")
+val UNIT_OPTIONS_RECIPE = listOf("grams", "ml", "tsp", "tbsp", "cups", "pieces", "oz", "lbs", "kg", "L")
 
 // ─────────────────────────────────────────────────────────────
 // Stateful Screen (wires ViewModel)
@@ -163,7 +160,7 @@ fun CreateRecipeScreenLayout(
     onUseMaxServingChange: (Boolean) -> Unit,
     onMaxServingSizeChange: (Int) -> Unit,
     onToggleTag: (String) -> Unit,
-    onAddIngredient: (Ingredient) -> Unit,
+    onAddIngredient: (RecipeIngredient) -> Unit,
     onRemoveIngredient: (String) -> Unit,
     onSave: (Boolean) -> Unit
 ) {
@@ -222,6 +219,7 @@ fun CreateRecipeScreenLayout(
                     )
                     1 -> Step2Ingredients(
                         ingredients = uiState.ingredients,
+                        globalIngredients = uiState.globalIngredients,
                         ingredientError = uiState.ingredientError,
                         onAddIngredient = onAddIngredient,
                         onRemoveIngredient = onRemoveIngredient
@@ -495,14 +493,18 @@ private fun ServingStepper(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Step2Ingredients(
-    ingredients: List<Ingredient>,
+    ingredients: List<RecipeIngredient>,
+    globalIngredients: List<GlobalIngredient>,
     ingredientError: String?,
-    onAddIngredient: (Ingredient) -> Unit,
+    onAddIngredient: (RecipeIngredient) -> Unit,
     onRemoveIngredient: (String) -> Unit
 ) {
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+
+    // Build a lookup map for display
+    val globalMap = remember(globalIngredients) { globalIngredients.associateBy { it.ingredientId } }
 
     Column(
         modifier = Modifier
@@ -562,10 +564,12 @@ private fun Step2Ingredients(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(ingredients, key = { _, it -> it.ingredientId }) { _, ingredient ->
-                    IngredientCard(
+                itemsIndexed(ingredients, key = { _, it -> it.globalIngredientId }) { _, ingredient ->
+                    val globalIngredient = globalMap[ingredient.globalIngredientId]
+                    RecipeIngredientCard(
                         ingredient = ingredient,
-                        onDelete = { onRemoveIngredient(ingredient.ingredientId) }
+                        ingredientName = globalIngredient?.name ?: "Unknown",
+                        onDelete = { onRemoveIngredient(ingredient.globalIngredientId) }
                     )
                 }
             }
@@ -579,9 +583,11 @@ private fun Step2Ingredients(
             containerColor = MaterialTheme.colorScheme.surface,
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
-            AddIngredientBottomSheet(
-                onSave = { ingredient ->
-                    onAddIngredient(ingredient)
+            PickIngredientBottomSheet(
+                globalIngredients = globalIngredients,
+                alreadyAdded = ingredients.map { it.globalIngredientId }.toSet(),
+                onSave = { recipeIngredient ->
+                    onAddIngredient(recipeIngredient)
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
                         showBottomSheet = false
                     }
@@ -597,12 +603,13 @@ private fun Step2Ingredients(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Ingredient Card
+// Recipe Ingredient Card (shows name from global library)
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun IngredientCard(
-    ingredient: Ingredient,
+private fun RecipeIngredientCard(
+    ingredient: RecipeIngredient,
+    ingredientName: String,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -620,7 +627,7 @@ private fun IngredientCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = ingredient.name,
+                    text = ingredientName,
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
@@ -631,17 +638,6 @@ private fun IngredientCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (ingredient.spiceIntensityValue > 0 || ingredient.sweetnessValue > 0 || ingredient.saltnessValue > 0) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (ingredient.spiceIntensityValue > 0)
-                            FlavorBadge("🌶 ${ingredient.spiceIntensityValue.toInt()}")
-                        if (ingredient.sweetnessValue > 0)
-                            FlavorBadge("🍯 ${ingredient.sweetnessValue.toInt()}")
-                        if (ingredient.saltnessValue > 0)
-                            FlavorBadge("🧂 ${ingredient.saltnessValue.toInt()}")
-                    }
-                }
             }
             IconButton(onClick = onDelete) {
                 Icon(
@@ -654,239 +650,195 @@ private fun IngredientCard(
     }
 }
 
-@Composable
-private fun FlavorBadge(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(4.dp)
-            )
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    )
-}
 
 // ─────────────────────────────────────────────────────────────
-// Add Ingredient Bottom Sheet
+// Pick Ingredient Bottom Sheet (from Global Library)
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun AddIngredientBottomSheet(
-    onSave: (Ingredient) -> Unit,
+private fun PickIngredientBottomSheet(
+    globalIngredients: List<GlobalIngredient>,
+    alreadyAdded: Set<String>,
+    onSave: (RecipeIngredient) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedIngredient by remember { mutableStateOf<GlobalIngredient?>(null) }
     var quantityText by remember { mutableStateOf("") }
-    var selectedUnit by remember { mutableStateOf("grams") }
-    var isDispensable by remember { mutableStateOf(false) }
-    var showAdvanced by remember { mutableStateOf(false) }
-    var spice by remember { mutableDoubleStateOf(0.0) }
-    var sweetness by remember { mutableDoubleStateOf(0.0) }
-    var saltiness by remember { mutableDoubleStateOf(0.0) }
-    var nameError by remember { mutableStateOf<String?>(null) }
+    var selectedUnit by remember { mutableStateOf("") }
     var quantityError by remember { mutableStateOf<String?>(null) }
     var unitExpanded by remember { mutableStateOf(false) }
+
+    val filtered = remember(searchQuery, globalIngredients, alreadyAdded) {
+        globalIngredients
+            .filter { it.ingredientId !in alreadyAdded }
+            .filter { searchQuery.isBlank() || it.name.contains(searchQuery, ignoreCase = true) }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            "Add Ingredient",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold
-        )
-
-        SousChefTextField(
-            value = name,
-            onValueChange = { name = it; nameError = null },
-            label = "Ingredient Name *",
-            isError = nameError != null,
-            errorMessage = nameError
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SousChefTextField(
-                value = quantityText,
-                onValueChange = { quantityText = it; quantityError = null },
-                label = "Quantity *",
-                isError = quantityError != null,
-                errorMessage = quantityError,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f)
+        if (selectedIngredient == null) {
+            // ── Stage 1: Search & Pick ──
+            Text(
+                "Select Ingredient",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
             )
 
-            // Unit dropdown
-            Box(modifier = Modifier.weight(1f)) {
-                SousChefTextField(
-                    value = selectedUnit,
-                    onValueChange = {},
-                    label = "Unit",
-                    trailingIcon = {
-                        IconButton(onClick = { unitExpanded = !unitExpanded }) {
-                            Icon(
-                                if (unitExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                                contentDescription = "Select unit"
-                            )
-                        }
-                    },
-                    modifier = Modifier.clickable { unitExpanded = true }
-                )
-                DropdownMenu(
-                    expanded = unitExpanded,
-                    onDismissRequest = { unitExpanded = false }
+            SousChefTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = "Search ingredients…"
+            )
+
+            if (filtered.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    UNIT_OPTIONS.forEach { unit ->
-                        DropdownMenuItem(
-                            text = { Text(unit) },
-                            onClick = {
-                                selectedUnit = unit
-                                unitExpanded = false
+                    Text(
+                        text = if (globalIngredients.isEmpty()) "No ingredients in the library yet.\nAdd some from the Ingredient Library screen."
+                               else "No matching ingredients found.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(300.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(filtered, key = { it.ingredientId }) { ingredient ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedIngredient = ingredient
+                                    selectedUnit = ingredient.defaultUnit
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Outlined.Restaurant,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = ingredient.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = ingredient.defaultUnit,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
-        }
 
-        // Dispensable toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Hardware dispensable",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton(text = "Cancel", onClick = onDismiss)
+            Spacer(Modifier.height(16.dp))
+
+        } else {
+            // ── Stage 2: Enter Quantity ──
+            val sel = selectedIngredient!!
+
+            Text(
+                "Add ${sel.name}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SousChefTextField(
+                    value = quantityText,
+                    onValueChange = { quantityText = it; quantityError = null },
+                    label = "Quantity *",
+                    isError = quantityError != null,
+                    errorMessage = quantityError,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f)
                 )
-                Text(
-                    "Can the smart dispenser handle this?",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                Box(modifier = Modifier.weight(1f)) {
+                    SousChefTextField(
+                        value = selectedUnit,
+                        onValueChange = {},
+                        label = "Unit",
+                        trailingIcon = {
+                            IconButton(onClick = { unitExpanded = !unitExpanded }) {
+                                Icon(
+                                    if (unitExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                    contentDescription = "Select unit"
+                                )
+                            }
+                        },
+                        modifier = Modifier.clickable { unitExpanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = unitExpanded,
+                        onDismissRequest = { unitExpanded = false }
+                    ) {
+                        UNIT_OPTIONS_RECIPE.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit) },
+                                onClick = { selectedUnit = unit; unitExpanded = false }
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SecondaryButton(
+                    text = "Back",
+                    onClick = { selectedIngredient = null; quantityText = ""; quantityError = null },
+                    modifier = Modifier.weight(1f)
+                )
+                PrimaryButton(
+                    text = "Add",
+                    onClick = {
+                        val qty = quantityText.toDoubleOrNull()
+                        if (qty == null || qty <= 0) {
+                            quantityError = "Enter a valid quantity"
+                            return@PrimaryButton
+                        }
+                        onSave(
+                            RecipeIngredient(
+                                globalIngredientId = sel.ingredientId,
+                                quantity = qty,
+                                unit = selectedUnit
+                            )
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
                 )
             }
-            Switch(
-                checked = isDispensable,
-                onCheckedChange = { isDispensable = it },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            )
+            Spacer(Modifier.height(24.dp))
         }
-
-        // Advanced flavor settings
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showAdvanced = !showAdvanced },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Flavor Profile (Advanced)",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(
-                if (showAdvanced) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        if (showAdvanced) {
-            FlavorSlider("🌶 Spice Intensity", spice) { spice = it }
-            FlavorSlider("🍯 Sweetness", sweetness) { sweetness = it }
-            FlavorSlider("🧂 Saltiness", saltiness) { saltiness = it }
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SecondaryButton(
-                text = "Cancel",
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f)
-            )
-            PrimaryButton(
-                text = "Add",
-                onClick = {
-                    var valid = true
-                    if (name.isBlank()) { nameError = "Name required"; valid = false }
-                    val qty = quantityText.toDoubleOrNull()
-                    if (qty == null || qty <= 0) { quantityError = "Enter a valid quantity"; valid = false }
-                    if (!valid) return@PrimaryButton
-
-                    onSave(
-                        Ingredient(
-                            ingredientId = UUID.randomUUID().toString(),
-                            name = name.trim(),
-                            quantity = qty!!,
-                            unit = selectedUnit,
-                            isDispensable = isDispensable,
-                            spiceIntensityValue = spice,
-                            sweetnessValue = sweetness,
-                            saltnessValue = saltiness
-                        )
-                    )
-                },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun FlavorSlider(
-    label: String,
-    value: Double,
-    onValueChange: (Double) -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                value.toInt().toString(),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { onValueChange(it.toDouble()) },
-            valueRange = 0f..10f,
-            steps = 9,
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        )
     }
 }
 
@@ -899,6 +851,10 @@ private fun Step3Review(
     uiState: CreateRecipeUiState,
     onSave: (Boolean) -> Unit
 ) {
+    val globalMap = remember(uiState.globalIngredients) {
+        uiState.globalIngredients.associateBy { it.ingredientId }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -961,6 +917,7 @@ private fun Step3Review(
             ) {
                 Column {
                     uiState.ingredients.forEachIndexed { index, ingredient ->
+                        val name = globalMap[ingredient.globalIngredientId]?.name ?: "Unknown"
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -968,7 +925,7 @@ private fun Step3Review(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                ingredient.name,
+                                name,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -1052,9 +1009,14 @@ private fun CreateRecipeStep2Preview() {
             uiState = CreateRecipeUiState(
                 currentStep = 1,
                 ingredients = listOf(
-                    Ingredient("1", "Arborio Rice", 200.0, "grams", spiceIntensityValue = 0.0),
-                    Ingredient("2", "Parmesan Cheese", 80.0, "grams", sweetnessValue = 2.0),
-                    Ingredient("3", "White Truffle Oil", 2.0, "tbsp", spiceIntensityValue = 1.0)
+                    RecipeIngredient("g1", 200.0, "grams"),
+                    RecipeIngredient("g2", 80.0, "grams"),
+                    RecipeIngredient("g3", 2.0, "tbsp")
+                ),
+                globalIngredients = listOf(
+                    GlobalIngredient(ingredientId = "g1", name = "Arborio Rice", defaultUnit = "grams"),
+                    GlobalIngredient(ingredientId = "g2", name = "Parmesan Cheese", defaultUnit = "grams"),
+                    GlobalIngredient(ingredientId = "g3", name = "White Truffle Oil", defaultUnit = "tbsp")
                 )
             ),
             snackbarHostState = remember { SnackbarHostState() },
@@ -1080,9 +1042,14 @@ private fun CreateRecipeStep3Preview() {
                 baseServingSize = 4,
                 selectedTags = listOf("🇮🇹 Italian", "🌿 Vegetarian"),
                 ingredients = listOf(
-                    Ingredient("1", "Arborio Rice", 200.0, "grams"),
-                    Ingredient("2", "Parmesan Cheese", 80.0, "grams"),
-                    Ingredient("3", "White Truffle Oil", 2.0, "tbsp")
+                    RecipeIngredient("g1", 200.0, "grams"),
+                    RecipeIngredient("g2", 80.0, "grams"),
+                    RecipeIngredient("g3", 2.0, "tbsp")
+                ),
+                globalIngredients = listOf(
+                    GlobalIngredient(ingredientId = "g1", name = "Arborio Rice", defaultUnit = "grams"),
+                    GlobalIngredient(ingredientId = "g2", name = "Parmesan Cheese", defaultUnit = "grams"),
+                    GlobalIngredient(ingredientId = "g3", name = "White Truffle Oil", defaultUnit = "tbsp")
                 )
             ),
             snackbarHostState = remember { SnackbarHostState() },

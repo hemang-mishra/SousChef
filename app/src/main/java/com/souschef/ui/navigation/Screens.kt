@@ -39,6 +39,10 @@ sealed interface Screens : NavKey {
     @Serializable data object NavSavedRecipesRoute : Screens
     @Serializable data object NavProfileRoute : Screens
 
+    // ── Ingredient Library (Phase 1A) ────────────────────
+    @Serializable data object NavIngredientLibraryRoute : Screens
+    @Serializable data class NavAddEditIngredientRoute(val ingredientId: String? = null) : Screens
+
     // ── Admin (Phase 8+) ─────────────────────────────────
     @Serializable data object NavAdminRoute : Screens
 }

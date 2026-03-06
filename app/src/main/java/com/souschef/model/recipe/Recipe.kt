@@ -9,6 +9,9 @@ import com.google.firebase.firestore.DocumentId
  * Firestore document model for a recipe.
  * Document path: `recipes/{recipeId}`
  *
+ * Ingredients are stored as embedded [RecipeIngredient] sub-documents that
+ * reference the global ingredient library via [RecipeIngredient.globalIngredientId].
+ *
  * All fields have defaults for Firestore `toObject<Recipe>()`.
  */
 data class Recipe(
@@ -28,6 +31,6 @@ data class Recipe(
     val createdAt: Timestamp = Timestamp.now(),
     val updatedAt: Timestamp = Timestamp.now(),
     val tags: List<String> = emptyList(),
-    val ingredients: List<Ingredient> = emptyList()
+    val ingredients: List<RecipeIngredient> = emptyList()
 )
 

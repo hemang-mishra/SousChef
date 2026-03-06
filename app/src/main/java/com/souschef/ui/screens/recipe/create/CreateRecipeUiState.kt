@@ -1,6 +1,7 @@
 package com.souschef.ui.screens.recipe.create
 
-import com.souschef.model.recipe.Ingredient
+import com.souschef.model.ingredient.GlobalIngredient
+import com.souschef.model.recipe.RecipeIngredient
 
 /**
  * UI state for the multi-step Create Recipe wizard.
@@ -20,8 +21,9 @@ data class CreateRecipeUiState(
     val useMaxServing: Boolean = false,
     val selectedTags: List<String> = emptyList(),
 
-    // Step 2: Ingredients
-    val ingredients: List<Ingredient> = emptyList(),
+    // Step 2: Ingredients (references to global library)
+    val ingredients: List<RecipeIngredient> = emptyList(),
+    val globalIngredients: List<GlobalIngredient> = emptyList(),
 
     // Validation
     val titleError: String? = null,
@@ -37,4 +39,3 @@ data class CreateRecipeUiState(
     val canGoNext: Boolean get() = currentStep < totalSteps - 1
     val canGoBack: Boolean get() = currentStep > 0
 }
-

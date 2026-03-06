@@ -2,7 +2,7 @@ package com.souschef.usecases.recipe
 
 import com.google.firebase.Timestamp
 import com.souschef.model.auth.UserProfile
-import com.souschef.model.recipe.Ingredient
+import com.souschef.model.recipe.RecipeIngredient
 import com.souschef.model.recipe.Recipe
 import com.souschef.repository.recipe.RecipeRepository
 import com.souschef.util.Resource
@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.flow
 
 /**
  * Creates a recipe with metadata and ingredients.
- * - Calculates perPersonQuantity for each ingredient before saving.
+ * - Calculates perPersonQuantity for each RecipeIngredient before saving.
  * - Sets creator info from the current user.
  * - Returns the new recipeId.
  */
@@ -25,7 +25,7 @@ class CreateRecipeUseCase(
         minServingSize: Int?,
         maxServingSize: Int?,
         tags: List<String>,
-        ingredients: List<Ingredient>,
+        ingredients: List<RecipeIngredient>,
         currentUser: UserProfile,
         publish: Boolean = false
     ): Flow<Resource<String>> = flow {
@@ -63,4 +63,3 @@ class CreateRecipeUseCase(
         }
     }
 }
-

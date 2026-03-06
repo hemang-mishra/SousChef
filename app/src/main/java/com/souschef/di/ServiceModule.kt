@@ -1,6 +1,7 @@
 package com.souschef.di
 
 import com.souschef.service.auth.FirebaseAuthService
+import com.souschef.service.ingredient.FirebaseIngredientService
 import com.souschef.service.recipe.FirebaseRecipeService
 import org.koin.dsl.module
 
@@ -11,4 +12,5 @@ import org.koin.dsl.module
 val serviceModule = module {
     single { FirebaseAuthService(get(), get()) }
     single { FirebaseRecipeService(get()) }
+    single { FirebaseIngredientService(get()) }
 }

@@ -42,7 +42,8 @@ fun HomeScreen(
     displayName: String?,
     onCreateRecipe: () -> Unit,
     onSignOut: () -> Unit,
-    onDesignTest: () -> Unit
+    onDesignTest: () -> Unit,
+    onIngredientLibrary: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -111,6 +112,16 @@ fun HomeScreen(
             Spacer(Modifier.height(16.dp))
 
             SecondaryButton(
+                text = "Ingredient Library",
+                onClick = onIngredientLibrary,
+                leadingIcon = {
+                    Icon(Icons.Outlined.Restaurant, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            SecondaryButton(
                 text = "Design System",
                 onClick = onDesignTest,
                 leadingIcon = {
@@ -136,7 +147,8 @@ private fun HomeScreenPreview() {
             displayName = "Marco Rossi",
             onCreateRecipe = {},
             onSignOut = {},
-            onDesignTest = {}
+            onDesignTest = {},
+            onIngredientLibrary = {}
         )
     }
 }

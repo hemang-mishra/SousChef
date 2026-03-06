@@ -1,11 +1,17 @@
 package com.souschef.model.recipe
 
 /**
- * Embedded sub-document within a Recipe.
- * Represents a single ingredient with quantity and flavor attributes.
+ * **DEPRECATED** — Legacy embedded ingredient model.
  *
- * All fields have defaults for Firestore deserialization.
+ * Use [RecipeIngredient] (references global library via globalIngredientId) +
+ * [com.souschef.model.ingredient.GlobalIngredient] instead.
+ *
+ * Kept for backward compatibility with any existing Firestore data.
  */
+@Deprecated(
+    message = "Use RecipeIngredient + GlobalIngredient instead",
+    replaceWith = ReplaceWith("RecipeIngredient")
+)
 data class Ingredient(
     val ingredientId: String = "",
     val name: String = "",
@@ -17,4 +23,3 @@ data class Ingredient(
     val sweetnessValue: Double = 0.0,
     val saltnessValue: Double = 0.0
 )
-

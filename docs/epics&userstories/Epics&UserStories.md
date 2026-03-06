@@ -120,21 +120,24 @@ Each recipe shall contain:
 
 ---
 
-## 2️⃣ Ingredient Model
+## 2️⃣ RecipeIngredient Model (Reference to Global Ingredient)
 
-Each ingredient shall store:
+Recipes no longer embed full ingredient definitions inline. Instead, each recipe references ingredients from the **Global Ingredient Library** (see Epic 6) and stores only recipe-specific quantity data.
 
-* Ingredient name
+Each recipe ingredient shall store:
+
+* `globalIngredientId` — reference to the global ingredient entry
 * Quantity (for base serving size)
-* Unit (grams, tsp, etc.)
+* Unit (grams, tsp, etc.) — defaults to the global ingredient's `defaultUnit`
 * Derived per-person quantity (system calculated)
-* Flavor attributes:
 
-    * `spice_intensity_value`
-    * `sweetness_value`
-    * `saltiness_value`
+Flavor attributes (`spice_intensity_value`, `sweetness_value`, `saltiness_value`) and the `is_dispensable` flag are resolved at runtime by joining with the referenced `GlobalIngredient`. These values are **not duplicated** in the recipe-level ingredient.
 
-These values are numerical weights used for recalculation logic.
+This design ensures:
+
+* Ingredient definitions are managed centrally and reused across recipes.
+* Changes to a global ingredient (e.g., updating an image or correcting flavor values) propagate automatically.
+* Recipe creation is faster since creators pick from existing ingredients instead of manually entering details each time.
 
 ---
 
@@ -267,11 +270,11 @@ So that ingredient scaling can be calculated properly.
 
 ---
 
-### **US 2.2 – Add Ingredient with Flavor Attributes**
+### **US 2.2 – Select Ingredients from Global Library**
 
 As a recipe creator,
-I want to add ingredients with quantity and associated flavor attributes,
-So that customization can be calculated automatically.
+I want to select ingredients from the global ingredient library and specify recipe-specific quantities,
+So that ingredient data is consistent across recipes and flavor customization can be calculated automatically.
 
 ---
 
@@ -840,3 +843,161 @@ So that I can modify ingredients, quantities, or steps according to my needs.
 As a user,
 I want to save recipes to my personal collection,
 So that I can easily access them later.
+
+---
+
+---
+
+# **Epic 6: Global Ingredient Library**
+
+## **Epic Description**
+
+This Epic introduces a centralized, app-wide ingredient library that replaces the previous approach of creating ingredients inline for every recipe.
+
+Instead of manually entering ingredient names, flavor attributes, and dispensability flags each time a recipe is created, the system maintains a **global set of ingredients**. Each global ingredient stores its name, an **optional image**, flavor profile values, dispensability status, and a default unit of measurement.
+
+When creating a recipe, the recipe creator **selects ingredients from this global library** and specifies only the recipe-specific quantity and unit. All shared attributes (flavor values, dispensability, image) are resolved from the global ingredient at runtime.
+
+Any authenticated user can add new ingredients to the global library. Once added, an ingredient becomes available to all users across all recipes.
+
+This ensures:
+
+* Consistency of ingredient data across the platform.
+* Faster recipe creation through search-and-select instead of manual data entry.
+* Central management of ingredient images, flavor profiles, and hardware compatibility.
+* Changes to a global ingredient (e.g., updating an image) propagate to all recipes referencing it.
+
+---
+
+# **Core System Design (Internal Logic)**
+
+---
+
+## 1️⃣ Global Ingredient Model
+
+Each global ingredient shall store:
+
+* Unique ingredient ID (auto-generated)
+* Ingredient name
+* Optional image URL (for visual identification)
+* Default unit of measurement (grams, tsp, etc.)
+* Whether the ingredient is dispensable by hardware (`is_dispensable`)
+* Flavor attributes:
+    * `spice_intensity_value` (0.0 – 10.0)
+    * `sweetness_value` (0.0 – 10.0)
+    * `saltiness_value` (0.0 – 10.0)
+* Created-by user ID (for attribution)
+* Created-at timestamp
+* Updated-at timestamp
+
+---
+
+## 2️⃣ Ingredient Image Management
+
+Each global ingredient may optionally have an associated image.
+
+Images are:
+
+* Uploaded to cloud storage (Firebase Storage).
+* Stored at a standard path: `ingredient_images/{ingredientId}.jpg`.
+* Displayed as thumbnails in the ingredient library list and in recipe ingredient rows.
+* Not required — ingredients without images display a default placeholder icon.
+
+---
+
+## 3️⃣ Recipe-Level Ingredient Reference
+
+When a recipe uses an ingredient, it stores a **reference** to the global ingredient rather than duplicating all its attributes.
+
+The recipe-level ingredient (RecipeIngredient) stores:
+
+* `globalIngredientId` — reference to the global ingredient
+* `quantity` — amount needed for the recipe's base serving size
+* `unit` — unit of measurement (defaults to the global ingredient's `defaultUnit`)
+* `perPersonQuantity` — system-calculated: `quantity / baseServingSize`
+
+At runtime, the system resolves the full ingredient details (name, image, flavor values, dispensability) by joining with the global ingredient.
+
+---
+
+## 4️⃣ Ingredient Library Search & Selection
+
+During recipe creation, the system provides:
+
+* A searchable list of all global ingredients.
+* Ingredients displayed with name and optional thumbnail image.
+* A selection flow where the user picks an ingredient and then specifies quantity and unit.
+* An option to add a new global ingredient if the desired one does not exist in the library.
+
+---
+
+## 5️⃣ Ingredient Library Management
+
+Any authenticated user can:
+
+* Browse all ingredients in the global library.
+* Search ingredients by name.
+* Add a new global ingredient (with name, optional image, default unit, dispensability, and flavor attributes).
+* Edit an existing global ingredient they created (name, image, flavor values, dispensability).
+
+Admins may manage or curate the ingredient library in a future phase.
+
+---
+
+# **User Stories – Epic 6**
+
+---
+
+### **US 6.1 – Browse Global Ingredient Library**
+
+As a user,
+I want to browse the global ingredient library,
+So that I can see all available ingredients in the system.
+
+---
+
+### **US 6.2 – Search Ingredients**
+
+As a user,
+I want to search for ingredients by name in the global library,
+So that I can quickly find the ingredient I need.
+
+---
+
+### **US 6.3 – Add Global Ingredient**
+
+As an authenticated user,
+I want to add a new ingredient to the global library with name, default unit, dispensability, and flavor attributes,
+So that it becomes available for all recipes across the platform.
+
+---
+
+### **US 6.4 – Upload Ingredient Image**
+
+As an authenticated user,
+I want to upload an optional image for a global ingredient,
+So that the ingredient can be visually identified in the library and in recipes.
+
+---
+
+### **US 6.5 – Edit Global Ingredient**
+
+As an authenticated user,
+I want to edit a global ingredient that I created,
+So that I can correct or update its details, image, or flavor attributes.
+
+---
+
+### **US 6.6 – Select Ingredient from Library During Recipe Creation**
+
+As a recipe creator,
+I want to search and select ingredients from the global library when adding ingredients to my recipe,
+So that I can quickly add consistent ingredient data without manual entry.
+
+---
+
+### **US 6.7 – Add New Ingredient Inline During Recipe Creation**
+
+As a recipe creator,
+I want to add a new ingredient to the global library directly from the recipe creation flow if the ingredient does not already exist,
+So that I can continue creating my recipe without leaving the creation wizard.

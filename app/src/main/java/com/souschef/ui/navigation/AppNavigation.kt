@@ -23,6 +23,9 @@ import com.souschef.ui.screens.auth.login.LoginScreen
 import com.souschef.ui.screens.auth.signup.SignUpScreen
 import com.souschef.ui.screens.designtest.DesignTestScreen
 import com.souschef.ui.screens.home.HomeScreen
+import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientScreen
+import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientViewModel
+import com.souschef.ui.screens.ingredient.library.IngredientLibraryScreen
 import com.souschef.ui.screens.recipe.create.CreateRecipeScreen
 import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
 import com.souschef.ui.theme.SousChefTheme
@@ -120,7 +123,8 @@ fun AppNavigation() {
                     displayName = currentUser?.displayName,
                     onCreateRecipe = { backstack.add(Screens.NavCreateRecipeRoute) },
                     onSignOut = { appViewModel.signOut() },
-                    onDesignTest = { backstack.add(Screens.NavDesignTestRoute) }
+                    onDesignTest = { backstack.add(Screens.NavDesignTestRoute) },
+                    onIngredientLibrary = { backstack.add(Screens.NavIngredientLibraryRoute) }
                 )
             }
 
@@ -142,6 +146,27 @@ fun AppNavigation() {
             entry<Screens.NavDesignTestRoute> {
                 DesignTestScreen(
                     onNavigateHome = { backstack.add(Screens.NavHomeRoute) }
+                )
+            }
+
+            // ── Ingredient Library (Phase 1A) ────────────
+            entry<Screens.NavIngredientLibraryRoute> {
+                IngredientLibraryScreen(
+                    onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    onAddIngredient = { backstack.add(Screens.NavAddEditIngredientRoute(ingredientId = null)) },
+                    onEditIngredient = { id -> backstack.add(Screens.NavAddEditIngredientRoute(ingredientId = id)) }
+                )
+            }
+
+            entry<Screens.NavAddEditIngredientRoute> { route ->
+                val currentUser = appViewModel.currentUser.value ?: UserProfile()
+                val viewModel: AddEditIngredientViewModel = koinInject {
+                    parametersOf(currentUser, route.ingredientId)
+                }
+                AddEditIngredientScreen(
+                    onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    onSaved = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    viewModel = viewModel
                 )
             }
 

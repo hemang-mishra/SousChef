@@ -3,7 +3,9 @@ package com.souschef.ui.screens.recipe.create
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.model.auth.UserProfile
-import com.souschef.model.recipe.Ingredient
+import com.souschef.model.ingredient.GlobalIngredient
+import com.souschef.model.recipe.RecipeIngredient
+import com.souschef.usecases.ingredient.GetIngredientsUseCase
 import com.souschef.usecases.recipe.CreateRecipeUseCase
 import com.souschef.usecases.recipe.PublishRecipeUseCase
 import com.souschef.util.Resource
@@ -21,6 +23,7 @@ import kotlinx.coroutines.launch
 class CreateRecipeViewModel(
     private val createRecipeUseCase: CreateRecipeUseCase,
     private val publishRecipeUseCase: PublishRecipeUseCase,
+    private val getIngredientsUseCase: GetIngredientsUseCase,
     private val currentUser: UserProfile
 ) : ViewModel() {
 
@@ -34,7 +37,8 @@ class CreateRecipeViewModel(
     private val _useMinServing = MutableStateFlow(false)
     private val _useMaxServing = MutableStateFlow(false)
     private val _selectedTags = MutableStateFlow<List<String>>(emptyList())
-    private val _ingredients = MutableStateFlow<List<Ingredient>>(emptyList())
+    private val _ingredients = MutableStateFlow<List<RecipeIngredient>>(emptyList())
+    private val _globalIngredients = MutableStateFlow<List<GlobalIngredient>>(emptyList())
     private val _titleError = MutableStateFlow<String?>(null)
     private val _ingredientError = MutableStateFlow<String?>(null)
     private val _isLoading = MutableStateFlow(false)
@@ -49,14 +53,14 @@ class CreateRecipeViewModel(
         combine(_minServingSize, _maxServingSize, _useMinServing, _useMaxServing) { min, max, useMin, useMax ->
             arrayOf<Any?>(min, max, useMin, useMax)
         },
-        combine(_selectedTags, _ingredients) { tags, ingredients ->
-            Pair(tags, ingredients)
+        combine(_selectedTags, _ingredients, _globalIngredients) { tags, ingredients, globalIngredients ->
+            Triple(tags, ingredients, globalIngredients)
         },
         combine(_titleError, _ingredientError, _isLoading, _generalError) { tErr, iErr, loading, gErr ->
             arrayOf<Any?>(tErr, iErr, loading, gErr)
         },
         combine(_isSaved, _savedRecipeId) { saved, id -> Pair(saved, id) }
-    ) { details, serving, (tags, ingredients), errors, (saved, savedId) ->
+    ) { details, serving, (tags, ingredients, globalIngredients), errors, (saved, savedId) ->
         CreateRecipeUiState(
             currentStep = details[0] as Int,
             title = details[1] as String,
@@ -68,6 +72,7 @@ class CreateRecipeViewModel(
             useMaxServing = serving[3] as Boolean,
             selectedTags = tags,
             ingredients = ingredients,
+            globalIngredients = globalIngredients,
             titleError = errors[0] as String?,
             ingredientError = errors[1] as String?,
             isLoading = errors[2] as Boolean,
@@ -76,6 +81,22 @@ class CreateRecipeViewModel(
             savedRecipeId = savedId
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CreateRecipeUiState())
+
+    init {
+        loadGlobalIngredients()
+    }
+
+    private fun loadGlobalIngredients() {
+        viewModelScope.launch {
+            try {
+                getIngredientsUseCase.execute().collect { ingredients ->
+                    _globalIngredients.value = ingredients
+                }
+            } catch (_: Exception) {
+                // Non-fatal — picker will just show empty
+            }
+        }
+    }
 
     // ── Step Navigation ──────────────────────────────────────
 
@@ -132,13 +153,13 @@ class CreateRecipeViewModel(
 
     // ── Step 2: Ingredients ──────────────────────────────────
 
-    fun onAddIngredient(ingredient: Ingredient) {
+    fun onAddIngredient(ingredient: RecipeIngredient) {
         _ingredients.value = _ingredients.value + ingredient
         _ingredientError.value = null
     }
 
-    fun onRemoveIngredient(ingredientId: String) {
-        _ingredients.value = _ingredients.value.filter { it.ingredientId != ingredientId }
+    fun onRemoveIngredient(globalIngredientId: String) {
+        _ingredients.value = _ingredients.value.filter { it.globalIngredientId != globalIngredientId }
     }
 
     // ── Step 3: Save ─────────────────────────────────────────
@@ -202,4 +223,3 @@ class CreateRecipeViewModel(
         return true
     }
 }
-

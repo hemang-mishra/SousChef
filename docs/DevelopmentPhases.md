@@ -17,6 +17,7 @@
 |-------|------|-------|
 | [Phase 0](#phase-0--project-foundation--ci-skeleton) | — | Project Foundation & CI Skeleton |
 | [Phase 1](#phase-1--authentication--role-management) | Epic 1 | Authentication & Role Management |
+| [Phase 1A](#phase-1a--global-ingredient-library) | Epic 6 | Global Ingredient Library |
 | [Phase 2](#phase-2--core-recipe-data-model--creation) | Epic 2 (partial) | Core Recipe Data Model & Creation |
 | [Phase 3](#phase-3--recipe-overview--flavor-customization) | Epic 2 (partial) | Recipe Overview & Flavor Customization |
 | [Phase 4](#phase-4--step-by-step-cooking-mode) | Epic 2 (partial) | Step-by-Step Cooking Mode |
@@ -508,17 +509,199 @@ In `AppNavigation`, observe `appViewModel.isLoggedIn` and redirect accordingly.
 
 ---
 
-# Phase 2 – Core Recipe Data Model & Creation
+# Phase 1A – Global Ingredient Library
 
 > **Prerequisites:** Phase 1 complete. User is logged in and `currentUser` is available from `AppViewModel`.
 
 ## Objective
-Implement the complete recipe data model in Firestore, and build the recipe creation flow: metadata entry, ingredient addition with flavor attributes, and saving to Firestore. Covers Epic 2 (US 2.1 – 2.3) and Epic 5 (US 5.1).
+Build the global ingredient library: a shared Firestore collection of ingredients with optional images. Provide CRUD operations, image upload to Firebase Storage, and list/add/edit screens. This library will be consumed by the recipe creation flow in Phase 2. Covers Epic 6 (US 6.1 – 6.5, 6.7).
 
 ## Context Files to Read First
 - `docs/Coding Guidelines.md`
 - `docs/DesignGuidelines.md`
 - Phase 1 output — `UserProfile`, `AppViewModel`, auth state
+
+---
+
+## Firestore Data Model
+
+### Collection: `ingredients`
+```
+ingredients/{ingredientId}
+├── ingredientId: String               // auto-generated doc ID
+├── name: String                       // e.g. "Red Chili Powder"
+├── imageUrl: String?                  // optional, Firebase Storage URL
+├── defaultUnit: String                // "grams", "tsp", "ml", etc.
+├── isDispensable: Boolean             // can the hardware dispense this? (for Epic 3)
+├── spiceIntensityValue: Double        // 0.0 – 10.0
+├── sweetnessValue: Double             // 0.0 – 10.0
+├── saltnessValue: Double              // 0.0 – 10.0
+├── createdByUserId: String            // uid of the user who added this ingredient
+├── createdAt: Timestamp
+└── updatedAt: Timestamp
+```
+
+**Rules:**
+- `name` must be unique (case-insensitive). Enforce client-side before writing.
+- `imageUrl` is `null` until a user uploads an image. Images are stored in Firebase Storage at `ingredient_images/{ingredientId}.jpg`.
+- Any authenticated user can create a new ingredient.
+- Only the user who created an ingredient (or an admin) can edit it.
+
+### Firebase Storage Path
+```
+ingredient_images/{ingredientId}.jpg
+```
+Images are compressed to max 512×512px before upload to keep storage lean.
+
+---
+
+## Architecture
+
+### Model (`model/ingredient/`)
+```kotlin
+data class GlobalIngredient(
+    val ingredientId: String = "",
+    val name: String = "",
+    val imageUrl: String? = null,
+    val defaultUnit: String = "grams",
+    val isDispensable: Boolean = false,
+    val spiceIntensityValue: Double = 0.0,
+    val sweetnessValue: Double = 0.0,
+    val saltnessValue: Double = 0.0,
+    val createdByUserId: String = "",
+    val createdAt: Timestamp = Timestamp.now(),
+    val updatedAt: Timestamp = Timestamp.now()
+)
+```
+
+### Service (`service/ingredient/FirebaseIngredientService.kt`)
+```kotlin
+suspend fun createIngredient(ingredient: GlobalIngredient): String     // returns new ingredientId
+suspend fun updateIngredient(ingredientId: String, updates: Map<String, Any>)
+suspend fun deleteIngredient(ingredientId: String)
+suspend fun getIngredient(ingredientId: String): GlobalIngredient?
+fun getAllIngredientsFlow(): Flow<List<GlobalIngredient>>
+fun searchIngredients(query: String): Flow<List<GlobalIngredient>>
+suspend fun uploadIngredientImage(ingredientId: String, imageBytes: ByteArray): String  // returns download URL
+```
+
+### Repository (`repository/ingredient/`)
+`IngredientRepository` interface + `FirestoreIngredientRepository` implementation wrapping the service.
+
+### Use Cases (`usecases/ingredient/`)
+**`AddGlobalIngredientUseCase`**
+- Validates that the ingredient name is not empty and not a duplicate.
+- Creates the Firestore document.
+- If an image is provided, uploads it to Firebase Storage and updates `imageUrl`.
+- Returns the new `ingredientId`.
+
+**`UpdateGlobalIngredientUseCase`**
+- Validates ownership (createdByUserId == currentUser.uid or isAdmin).
+- Updates the Firestore document.
+- If a new image is provided, uploads and updates `imageUrl`.
+
+**`GetIngredientsUseCase`**
+- Returns a Flow of all ingredients, optionally filtered by a search query.
+- Supports client-side name filtering for instant search.
+
+---
+
+## Screens
+
+### `IngredientLibraryScreen` (`ui/screens/ingredient/library/`)
+**Files:** `IngredientLibraryScreen.kt`, `IngredientLibraryViewModel.kt`, `IngredientLibraryUiState.kt`
+
+**UI Layout:**
+- Top app bar: "Ingredient Library" title, back arrow.
+- `SearchField` component at the top — filters the list in real-time as the user types.
+- `LazyColumn` of `IngredientLibraryRow` items.
+- FAB: "➕ Add Ingredient" — navigates to `NavAddEditIngredientRoute(ingredientId = null)`.
+
+**`IngredientLibraryRow` component:**
+- Horizontal row: optional thumbnail image (48dp × 48dp, rounded 8dp, placeholder icon if no image), ingredient name (`bodyLarge`), default unit chip, dispensable indicator icon.
+- Tap row → navigates to `NavAddEditIngredientRoute(ingredientId = id)` if the user owns it, otherwise shows a read-only detail bottom sheet.
+
+**ViewModel:**
+- Loads all ingredients via `GetIngredientsUseCase`.
+- `onSearchQueryChange(query: String)` — filters the list client-side.
+
+---
+
+### `AddEditIngredientScreen` (`ui/screens/ingredient/addedit/`)
+**Files:** `AddEditIngredientScreen.kt`, `AddEditIngredientViewModel.kt`, `AddEditIngredientUiState.kt`
+
+**Navigation param:** `ingredientId: String?` (null = add mode, non-null = edit mode)
+
+**UI Layout (scrollable column):**
+1. **Image Section** — circular image placeholder (120dp). Tap to pick image from gallery. Shows selected image preview or current `imageUrl`. Optional — can be skipped.
+2. **Name** — `SousChefTextField`, required.
+3. **Default Unit** — dropdown (`grams`, `ml`, `tsp`, `tbsp`, `cups`, `pieces`, `oz`, `lbs`, `kg`, `L`).
+4. **Dispensable Toggle** — `Switch` with label "Can be dispensed by hardware device".
+5. **Flavor Profile Section** — `SectionHeader` "Flavor Attributes", collapsible:
+   - Spice Intensity slider (0–10)
+   - Sweetness slider (0–10)
+   - Saltiness slider (0–10)
+6. **Save Button** — `PrimaryButton`: "Add Ingredient" (add mode) or "Save Changes" (edit mode).
+
+**ViewModel:**
+- In edit mode: loads existing ingredient data on init.
+- `onNameChange(name)`, `onUnitChange(unit)`, `onDispensableChange(value)`, `onSpiceChange(value)`, `onSweetnessChange(value)`, `onSaltnessChange(value)`, `onImageSelected(uri)`.
+- `onSave()` — calls `AddGlobalIngredientUseCase` or `UpdateGlobalIngredientUseCase`.
+- Validation: name required, name uniqueness check.
+
+---
+
+## Navigation Updates
+Add routes:
+```kotlin
+@Serializable data object NavIngredientLibraryRoute : Screens
+@Serializable data class NavAddEditIngredientRoute(val ingredientId: String? = null) : Screens
+```
+
+---
+
+## Dependencies
+Add `firebase-storage-ktx` to the version catalog and `app/build.gradle.kts`:
+```toml
+firebase-storage = { module = "com.google.firebase:firebase-storage-ktx" }
+```
+This is needed for ingredient image upload.
+
+---
+
+## Koin Updates
+Add `FirebaseIngredientService`, `FirestoreIngredientRepository`, `AddGlobalIngredientUseCase`, `UpdateGlobalIngredientUseCase`, `GetIngredientsUseCase`, `IngredientLibraryViewModel`, `AddEditIngredientViewModel` to respective modules.
+
+---
+
+## Acceptance Criteria for Phase 1A
+- [ ] Global ingredients can be created with name, default unit, dispensable flag, and flavor values.
+- [ ] Optional image can be uploaded for an ingredient (stored in Firebase Storage, URL saved in Firestore).
+- [ ] Ingredient library screen shows all ingredients in a searchable list.
+- [ ] Ingredients with images display thumbnails; those without show a placeholder icon.
+- [ ] Search filters ingredients by name in real-time.
+- [ ] Ingredient can be edited by the user who created it.
+- [ ] Duplicate ingredient names are prevented (case-insensitive).
+- [ ] Form validation: name is required.
+- [ ] UI follows design guidelines; no hardcoded colors.
+- [ ] Both light and dark previews for all new composables.
+
+---
+
+---
+
+# Phase 2 – Core Recipe Data Model & Creation
+
+> **Prerequisites:** Phase 1A complete. Global ingredient library exists in Firestore. User is logged in and `currentUser` is available from `AppViewModel`.
+
+## Objective
+Implement the complete recipe data model in Firestore, and build the recipe creation flow: metadata entry, ingredient selection from the global library, and saving to Firestore. Covers Epic 2 (US 2.1 – 2.3, including US 2.2 updated to use global ingredient references) and Epic 5 (US 5.1), and Epic 6 (US 6.6 – 6.7).
+
+## Context Files to Read First
+- `docs/Coding Guidelines.md`
+- `docs/DesignGuidelines.md`
+- Phase 1 output — `UserProfile`, `AppViewModel`, auth state
+- Phase 1A output — `GlobalIngredient` model, `IngredientRepository`, `GetIngredientsUseCase`
 
 ---
 
@@ -542,21 +725,19 @@ recipes/{recipeId}
 ├── createdAt: Timestamp
 ├── updatedAt: Timestamp
 ├── tags: List<String>             // e.g. ["vegetarian", "quick", "italian"]
-└── ingredients: List<Ingredient>  // embedded sub-documents
+└── ingredients: List<RecipeIngredient>  // embedded sub-documents referencing global ingredients
 ```
 
-### Embedded: `Ingredient`
+### Embedded: `RecipeIngredient`
+Recipe ingredients no longer store the full ingredient definition. Instead, they reference a `GlobalIngredient` from the `ingredients` collection (created in Phase 1A) and store only recipe-specific quantity data.
 ```
-├── ingredientId: String           // UUID generated client-side
-├── name: String
+├── globalIngredientId: String     // reference to ingredients/{ingredientId}
 ├── quantity: Double               // for baseServingSize
-├── unit: String                   // "grams", "tsp", "cups", etc.
+├── unit: String                   // "grams", "tsp", "cups", etc. (defaults to GlobalIngredient.defaultUnit)
 ├── perPersonQuantity: Double      // system-calculated: quantity / baseServingSize
-├── isDispensable: Boolean         // can the hardware dispense this? (for Epic 3)
-├── spiceIntensityValue: Double    // 0.0 – 10.0
-├── sweetnessValue: Double
-├── saltnessValue: Double
 ```
+
+At runtime, the app resolves the full ingredient details (name, imageUrl, isDispensable, spiceIntensityValue, sweetnessValue, saltnessValue) by fetching the referenced `GlobalIngredient`. This ensures ingredient data is managed centrally and stays consistent across all recipes.
 
 ### Sub-collection: `recipes/{recipeId}/steps`
 Steps are a sub-collection (not embedded) to allow independent ordering and large counts.
@@ -579,16 +760,18 @@ steps/{stepId}
 ### Models (`model/recipe/`)
 ```kotlin
 data class Recipe(...)
-data class Ingredient(...)
+data class RecipeIngredient(...)    // References GlobalIngredient via globalIngredientId
 data class RecipeStep(...)
 ```
 All fields must have default values for Firestore deserialization.
+
+`RecipeIngredient` contains only `globalIngredientId`, `quantity`, `unit`, and `perPersonQuantity`. The full ingredient details (name, imageUrl, isDispensable, flavor values) are resolved by joining with `GlobalIngredient` at read time.
 
 ### Service (`service/recipe/FirebaseRecipeService.kt`)
 ```kotlin
 suspend fun createRecipe(recipe: Recipe): String          // returns new recipeId
 suspend fun updateRecipe(recipeId: String, updates: Map<String, Any>)
-suspend fun addIngredient(recipeId: String, ingredient: Ingredient)
+suspend fun addIngredient(recipeId: String, ingredient: RecipeIngredient)
 suspend fun addStep(recipeId: String, step: RecipeStep)
 suspend fun getRecipe(recipeId: String): Recipe?
 fun getRecipesFlow(creatorId: String): Flow<List<Recipe>>
@@ -599,7 +782,7 @@ fun getRecipesFlow(creatorId: String): Flow<List<Recipe>>
 
 ### Use Cases (`usecases/recipe/`)
 **`CreateRecipeUseCase`**
-- Accepts recipe metadata + ingredient list.
+- Accepts recipe metadata + list of `RecipeIngredient` (each containing a `globalIngredientId` and recipe-specific `quantity`/`unit`).
 - Calculates `perPersonQuantity = quantity / baseServingSize` for each ingredient before saving.
 - Creates the Firestore document.
 - Returns the new `recipeId`.
@@ -623,15 +806,19 @@ A multi-step form wizard with three distinct steps. Use a `HorizontalPager` or c
 - Cover image picker (optional — use `ImagePicker` composable; store URI locally until recipe is saved, then upload).
 
 #### Step 2 — Ingredients
-- `LazyColumn` of added ingredients using `IngredientRow` component.
-- "Add Ingredient" FAB opens `AddIngredientBottomSheet`.
+- `LazyColumn` of added ingredients using `IngredientRow` component. Each row displays the ingredient name, optional thumbnail (from global ingredient's `imageUrl`), quantity, and unit.
+- "Add Ingredient" FAB opens `PickIngredientBottomSheet`.
 
-**`AddIngredientBottomSheet`:**
-- Name (text field)
-- Quantity (number field) + Unit dropdown (grams, ml, tsp, tbsp, cups, pieces)
-- Dispensable toggle (for hardware compatibility)
-- Flavor sliders: Spice (0–10), Sweetness (0–10), Saltiness (0–10) — collapsed by default with "Advanced" expand button
-- Save button adds ingredient to the list (local state, not yet saved to Firestore)
+**`PickIngredientBottomSheet`:**
+- `SearchField` at the top — filters global ingredients in real-time as user types.
+- `LazyColumn` of selectable `GlobalIngredient` rows (thumbnail image + name + default unit chip).
+- Tap an ingredient → transitions to a quantity entry sub-view:
+  - Ingredient name + thumbnail (read-only, from global library)
+  - Quantity (number field)
+  - Unit dropdown (pre-filled with `GlobalIngredient.defaultUnit`, editable)
+  - Save button adds the `RecipeIngredient` (with `globalIngredientId`, quantity, unit) to the local list
+- "Can't find your ingredient?" link at the bottom → navigates to `NavAddEditIngredientRoute(ingredientId = null)` to add a new global ingredient inline. On return, the new ingredient is automatically selected.
+- **Note:** Dispensable toggle and flavor sliders are **no longer shown here** — those attributes are managed centrally in the global ingredient library (Phase 1A).
 
 #### Step 3 — Review & Save
 - Summary card: recipe title, serving size, ingredient count.
@@ -639,8 +826,9 @@ A multi-step form wizard with three distinct steps. Use a `HorizontalPager` or c
 - "Save & Publish" button — saves and publishes (calls `PublishRecipeUseCase`).
 
 ### `CreateRecipeViewModel`
-- `UiState` holds: `currentStep`, `recipeTitle`, `description`, `baseServingSize`, `minServingSize`, `maxServingSize`, `ingredients: List<Ingredient>`, `tags`, `isLoading`, `error`.
-- Functions: `onNextStep()`, `onPreviousStep()`, `onAddIngredient(ingredient)`, `onRemoveIngredient(id)`, `onSave(publish: Boolean)`.
+- `UiState` holds: `currentStep`, `recipeTitle`, `description`, `baseServingSize`, `minServingSize`, `maxServingSize`, `ingredients: List<RecipeIngredient>`, `globalIngredients: List<GlobalIngredient>` (cached for the picker), `tags`, `isLoading`, `error`.
+- Functions: `onNextStep()`, `onPreviousStep()`, `onAddIngredient(recipeIngredient)`, `onRemoveIngredient(globalIngredientId)`, `onSave(publish: Boolean)`, `onSearchGlobalIngredients(query: String)`.
+- On init, loads global ingredients via `GetIngredientsUseCase` for the ingredient picker.
 
 ---
 
@@ -665,9 +853,12 @@ Add `CreateRecipeUseCase`, `PublishRecipeUseCase`, `FirebaseRecipeService`, `Fir
 
 ## Acceptance Criteria for Phase 2
 - [ ] Recipe can be created with title, description, base serving size, min/max restrictions, and tags.
-- [ ] Ingredients can be added with name, quantity, unit, dispensable flag, and flavor values.
+- [ ] Ingredients are selected from the global ingredient library (not manually entered).
+- [ ] Ingredient picker shows searchable list of global ingredients with optional thumbnails.
+- [ ] Recipe-specific quantity and unit can be set for each selected ingredient.
+- [ ] User can add a new global ingredient inline if the desired one is not found in the library.
 - [ ] `perPersonQuantity` is calculated correctly before saving.
-- [ ] Recipe is saved to Firestore as a draft (`isPublished = false`).
+- [ ] Recipe is saved to Firestore as a draft (`isPublished = false`) with `RecipeIngredient` references.
 - [ ] Recipe can be published (`isPublished = true`).
 - [ ] Form validation: title required, at least 1 ingredient required.
 - [ ] Multi-step form navigation works (Next / Back).
@@ -688,35 +879,54 @@ Build the pre-cooking overview screen where users can customize serving size and
 ## Context Files to Read First
 - `docs/Coding Guidelines.md`
 - `docs/DesignGuidelines.md`
-- Phase 2 output — `Recipe`, `Ingredient`, `RecipeStep` models, Firestore structure
+- Phase 1A output — `GlobalIngredient` model, `IngredientRepository`
+- Phase 2 output — `Recipe`, `RecipeIngredient`, `RecipeStep` models, Firestore structure
 
 ---
 
 ## Core Calculation Logic (`usecases/recipe/RecipeCalculationUseCase.kt`)
 This is a **pure computation use case** with no Firestore calls. Inject it into the ViewModel.
 
+Since recipes now store `RecipeIngredient` (quantity data only) and flavor values live on `GlobalIngredient`, the ViewModel must first **resolve** each `RecipeIngredient` by joining it with its corresponding `GlobalIngredient` (fetched via `IngredientRepository`). The resolved data is passed to this use case as a `ResolvedIngredient` — a combined view containing both the recipe-specific quantity fields and the global flavor/dispensability attributes.
+
 ```kotlin
+/**
+ * Combined view of RecipeIngredient + GlobalIngredient for calculation purposes.
+ */
+data class ResolvedIngredient(
+    val globalIngredientId: String,
+    val name: String,
+    val imageUrl: String?,
+    val quantity: Double,
+    val unit: String,
+    val perPersonQuantity: Double,
+    val isDispensable: Boolean,
+    val spiceIntensityValue: Double,
+    val sweetnessValue: Double,
+    val saltnessValue: Double
+)
+
 class RecipeCalculationUseCase {
 
     /**
      * Calculates final ingredient quantities after applying serving size and flavor adjustments.
      *
-     * @param ingredients Original ingredient list from the recipe.
+     * @param ingredients Resolved ingredient list (RecipeIngredient joined with GlobalIngredient).
      * @param baseServingSize The serving size the recipe was authored for.
      * @param selectedServings User-selected serving size.
      * @param spiceLevel User spice preference: -1.0 (less) to +1.0 (more), 0.0 = as-is.
      * @param saltLevel User salt preference: -1.0 to +1.0.
      * @param sweetnessLevel User sweetness preference: -1.0 to +1.0.
-     * @return New list of ingredients with adjusted quantities.
+     * @return New list of resolved ingredients with adjusted quantities.
      */
     fun calculate(
-        ingredients: List<Ingredient>,
+        ingredients: List<ResolvedIngredient>,
         baseServingSize: Int,
         selectedServings: Int,
         spiceLevel: Float,        // -1f..+1f
         saltLevel: Float,
         sweetnessLevel: Float
-    ): List<Ingredient>
+    ): List<ResolvedIngredient>
 }
 ```
 
@@ -730,7 +940,7 @@ class RecipeCalculationUseCase {
      ```
    - `level` is the user's preference (-1f to +1f). A value of 0 means no change.
 3. Round quantities to 1 decimal place.
-4. Return a new `List<Ingredient>` with updated quantities. Do not mutate the originals.
+4. Return a new `List<ResolvedIngredient>` with updated quantities. Do not mutate the originals.
 
 ---
 
@@ -758,7 +968,7 @@ Combines the recipe document with its `steps` sub-collection into a single Flow.
 data class RecipeOverviewUiState(
     val recipe: Recipe? = null,
     val steps: List<RecipeStep> = emptyList(),
-    val adjustedIngredients: List<Ingredient> = emptyList(),
+    val adjustedIngredients: List<ResolvedIngredient> = emptyList(),
     val selectedServings: Int = 1,
     val spiceLevel: Float = 0f,
     val saltLevel: Float = 0f,
@@ -769,7 +979,7 @@ data class RecipeOverviewUiState(
 ```
 
 **ViewModel events:**
-- `loadRecipe(recipeId: String)`
+- `loadRecipe(recipeId: String)` — fetches recipe, then resolves each `RecipeIngredient` by joining with `GlobalIngredient` from `IngredientRepository`
 - `onServingsChanged(servings: Int)` — re-runs `RecipeCalculationUseCase`
 - `onSpiceLevelChanged(level: Float)` — same
 - `onSaltLevelChanged(level: Float)` — same
@@ -794,7 +1004,7 @@ data class RecipeOverviewUiState(
    - Center position (0.5 mapped to 0f) = original recipe.
    - Slider range: 0f..1f mapped to -1f..+1f internally.
 
-4. **Ingredients List** — `SectionHeader` "Ingredients", then `LazyColumn` of `IngredientRow` showing adjusted quantities. Quantities animate smoothly on change using `animateFloatAsState`.
+4. **Ingredients List** — `SectionHeader` "Ingredients", then `LazyColumn` of `IngredientRow` showing adjusted quantities. Each row displays the ingredient's optional thumbnail image (from `GlobalIngredient.imageUrl`), name, and adjusted quantity. Quantities animate smoothly on change using `animateFloatAsState`.
 
 5. **Start Cooking Button** — `PrimaryButton` fixed at the bottom (outside scroll), full-width. Navigates to cooking mode.
 
@@ -840,7 +1050,7 @@ Build the immersive step-by-step cooking mode screen. Each step is shown one at 
 ## Context Files to Read First
 - `docs/Coding Guidelines.md`
 - `docs/DesignGuidelines.md`
-- Phase 3 output — `RecipeStep` model, flavor-adjusted `Ingredient` list, nav params
+- Phase 3 output — `RecipeStep` model, flavor-adjusted `ResolvedIngredient` list, nav params
 
 ---
 
@@ -865,7 +1075,7 @@ Wraps step navigation and timer logic:
 ```kotlin
 data class CookingModeUiState(
     val steps: List<RecipeStep> = emptyList(),
-    val adjustedIngredients: List<Ingredient> = emptyList(),
+    val adjustedIngredients: List<ResolvedIngredient> = emptyList(),
     val currentStepIndex: Int = 0,
     val timerMillisRemaining: Long = 0L,
     val isTimerRunning: Boolean = false,
@@ -876,7 +1086,7 @@ data class CookingModeUiState(
 ```
 
 **ViewModel:**
-- On init: fetch steps via `FirebaseRecipeService`, re-run `RecipeCalculationUseCase` with received params.
+- On init: fetch steps via `FirebaseRecipeService`, resolve `RecipeIngredient` → `ResolvedIngredient` by joining with `GlobalIngredient`, then re-run `RecipeCalculationUseCase` with received params.
 - Delegates step navigation and timer to `CookingSessionUseCase`.
 
 ---
@@ -959,7 +1169,8 @@ Integrate with the 6-compartment spice dispensing hardware device via BLE (Bluet
 
 ## Context Files to Read First
 - `docs/Coding Guidelines.md`
-- Phase 4 output — `CookingModeScreen`, `RecipeStep`, `Ingredient` with `isDispensable` flag
+- Phase 1A output — `GlobalIngredient` model with `isDispensable` flag
+- Phase 4 output — `CookingModeScreen`, `RecipeStep`, `ResolvedIngredient`
 
 ---
 
@@ -979,8 +1190,8 @@ devices/{userId}
 ### Embedded: `Compartment`
 ```
 ├── compartmentId: Int             // 1–6
-├── ingredientName: String?        // null if empty
-├── ingredientId: String?          // links to recipe ingredient
+├── ingredientName: String?        // null if empty (denormalized from GlobalIngredient for display)
+├── globalIngredientId: String?    // links to ingredients/{ingredientId} in global library
 ├── currentQuantityGrams: Double
 ├── maxCapacityGrams: Double
 ├── lastRefillAt: Timestamp?
@@ -1036,8 +1247,8 @@ Wraps both `FirebaseDeviceService` and `BleDeviceManager`.
 
 ### Use Case: `DispenseSpiceUseCase` (`usecases/device/DispenseSpiceUseCase.kt`)
 Called during cooking mode when a step references a dispensable ingredient:
-1. Check if ingredient's `isDispensable == true`.
-2. Find which compartment holds that ingredient (`ingredientId` match).
+1. Resolve the `GlobalIngredient` via `globalIngredientId` to check `isDispensable == true`.
+2. Find which compartment holds that ingredient (`globalIngredientId` match).
 3. Check if `currentQuantityGrams >= requiredQuantity`.
 4. If yes: call `BleDeviceManager.sendDispenseCommand(compartmentId, qty)`.
 5. Update Firestore `currentQuantityGrams` for that compartment.
@@ -1059,9 +1270,9 @@ After every dispense, check if `currentQuantityGrams <= lowThresholdGrams`. If t
 
 ### `CompartmentManagerScreen` (`ui/screens/device/compartments/`)
 - 2-column grid of 6 `CompartmentCard` composables.
-- Each card shows: compartment number, ingredient name (or "Empty"), quantity bar.
+- Each card shows: compartment number, ingredient name (or "Empty"), ingredient thumbnail from global library, quantity bar.
 - Tap card → `EditCompartmentBottomSheet`:
-  - Search + assign an ingredient from recipe history.
+  - Search + assign an ingredient from the **global ingredient library** (only dispensable ingredients shown, filtered by `isDispensable == true`).
   - Set current quantity (number field).
   - Set max capacity.
   - Save button.
@@ -1117,7 +1328,8 @@ Add an AI-assisted step generation flow using the Gemini API. The creator provid
 ## Context Files to Read First
 - `docs/Coding Guidelines.md`
 - `docs/DesignGuidelines.md`
-- Phase 2 output — `RecipeStep` model, `CreateRecipeScreen` (Step 3 will link here)
+- Phase 1A output — `GlobalIngredient` model
+- Phase 2 output — `RecipeStep` model, `RecipeIngredient`, `CreateRecipeScreen` (Step 3 will link here)
 
 ---
 
@@ -1175,7 +1387,7 @@ Return ONLY the JSON array. No explanation. No markdown.
 class GeminiRecipeService(private val model: GenerativeModel) {
     suspend fun generateSteps(
         recipeDescription: String,
-        ingredients: List<Ingredient>
+        ingredients: List<ResolvedIngredient>   // resolved from RecipeIngredient + GlobalIngredient
     ): List<RecipeStep>  // parses Gemini JSON response
 }
 ```
@@ -1189,7 +1401,7 @@ class GeminiRecipeService(private val model: GenerativeModel) {
 
 ### Use Case: `GenerateRecipeStepsUseCase`
 - Calls `GeminiRecipeService` to get generated steps.
-- Maps ingredient names in `ingredientReferences` back to real `ingredientId`s using the passed ingredient list.
+- Maps ingredient names in `ingredientReferences` back to `globalIngredientId`s by matching against the `ResolvedIngredient` list (using `GlobalIngredient.name`).
 - Returns `Flow<Resource<List<RecipeStep>>>`.
 
 ---
@@ -1205,7 +1417,7 @@ class GeminiRecipeService(private val model: GenerativeModel) {
 
 #### Stage 1 — Input
 - `SousChefTextField` (multi-line, 8 lines): "Describe your recipe in your own words…"
-- Readonly ingredient list summary (chips showing ingredient names already added).
+- Readonly ingredient list summary (chips showing ingredient names resolved from the global library via `globalIngredientId`).
 - `PrimaryButton`: "Generate Steps"
 - On tap: transitions to loading state.
 
@@ -1242,7 +1454,7 @@ A `LazyColumn` of editable step cards.
 - [ ] All generated steps are displayed as editable cards.
 - [ ] Creator can edit, delete, reorder, and add manual steps.
 - [ ] Saving stores all steps in Firestore `steps` sub-collection with correct `stepNumber` ordering.
-- [ ] Ingredient name references are resolved to ingredient IDs on save.
+- [ ] Ingredient name references are resolved to `globalIngredientId`s on save.
 - [ ] Loading state is shown during API call with a cancel option.
 - [ ] UI follows design guidelines; no hardcoded colors.
 - [ ] Both light and dark previews present.
@@ -1294,7 +1506,7 @@ suspend fun isRecipeSaved(userId: String, recipeId: String): Boolean
 ```
 
 ### Use Cases
-- **`ForkRecipeUseCase`** — creates a deep copy of a recipe (recipe doc + steps sub-collection) with `originalRecipeId` set, `isPublished = false`, `creatorId = currentUser.uid`.
+- **`ForkRecipeUseCase`** — creates a deep copy of a recipe (recipe doc with `RecipeIngredient` references + steps sub-collection) with `originalRecipeId` set, `isPublished = false`, `creatorId = currentUser.uid`. The forked recipe retains the same `globalIngredientId` references — no duplication of global ingredient data.
 - **`SaveRecipeUseCase`** — toggles save/unsave, increments/decrements `savedByCount` counter.
 
 ---
@@ -1326,7 +1538,7 @@ Replace the Phase 2 placeholder.
 - Chef info row: avatar, name, `VerifiedChefBadge`, "Follow" button (placeholder for future).
 - Metadata row: serves, prep time (estimated from step timers), tags chips.
 - **Action Row**: Save (bookmark) button + Fork ("Make My Copy" button).
-- `SectionHeader` "Ingredients" + ingredient list (non-adjustable here — that's in Overview).
+- `SectionHeader` "Ingredients" + ingredient list (resolved from global library — shows name, optional thumbnail image, and quantity; non-adjustable here — that's in Overview).
 - `SectionHeader` "Steps Preview" + first 2 steps with a "See All" link.
 - `PrimaryButton` "Start Cooking" → navigates to `NavRecipeOverviewRoute`.
 
@@ -1360,6 +1572,7 @@ Add a persistent `BottomNavigationBar` to the `Scaffold` in `AppNavigation` (sho
 - 🏠 Home (`NavHomeRoute`)
 - 🔖 Saved (`NavSavedRecipesRoute`)
 - ➕ Create (`NavCreateRecipeRoute`) — center button, gold FAB style
+- 🥕 Ingredients (`NavIngredientLibraryRoute`)
 - 👤 Profile (`NavProfileRoute`)
 
 ---
@@ -1589,6 +1802,7 @@ Ensure all screens that use `BaseViewModel` forward `errorFlow` to the shared `S
 | `androidx-navigation3-compose` | Navigation | Phase 0 |
 | `credentials` (CredentialManager) | Google Sign-In | Phase 1 |
 | `play-services-auth` | Google Sign-In | Phase 1 |
+| `firebase-storage-ktx` | Ingredient image upload | Phase 1A |
 | `generativeai` (Gemini) | AI step generation | Phase 6 |
 | `firebase-messaging-ktx` | Push notifications | Phase 9 |
 | `work-runtime-ktx` | Background sync | Phase 9 |
@@ -1600,7 +1814,8 @@ Ensure all screens that use `BaseViewModel` forward `errorFlow` to the shared `S
 | Collection | Purpose | Added in Phase |
 |-----------|---------|----------------|
 | `users` | User profiles, roles | Phase 1 |
-| `recipes` | Recipe documents | Phase 2 |
+| `ingredients` | Global ingredient library | Phase 1A |
+| `recipes` | Recipe documents (with `RecipeIngredient` refs) | Phase 2 |
 | `recipes/{id}/steps` | Recipe steps sub-collection | Phase 2 |
 | `devices` | Device configuration | Phase 5 |
 | `devices/{id}/dispenseLogs` | Dispense history | Phase 5 |
