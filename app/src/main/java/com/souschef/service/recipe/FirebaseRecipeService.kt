@@ -83,5 +83,14 @@ class FirebaseRecipeService(
             .get().await()
             .toObjects(RecipeStep::class.java)
     }
+
+    /**
+     * Fetches recipe document and steps in one call path for overview screens.
+     */
+    suspend fun getRecipeWithSteps(recipeId: String): Pair<Recipe?, List<RecipeStep>> {
+        val recipe = getRecipe(recipeId)
+        val steps = getSteps(recipeId)
+        return recipe to steps
+    }
 }
 

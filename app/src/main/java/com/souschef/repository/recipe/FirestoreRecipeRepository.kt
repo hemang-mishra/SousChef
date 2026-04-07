@@ -41,6 +41,21 @@ class FirestoreRecipeRepository(
         }
     }
 
+    override fun getRecipeWithSteps(recipeId: String): Flow<Resource<Pair<Recipe, List<RecipeStep>>>> = flow {
+        emit(Resource.loading())
+        val result = safeFirestoreCall { service.getRecipeWithSteps(recipeId) }
+        when (result) {
+            is Resource.Success -> {
+                val recipe = result.data?.first
+                val steps = result.data?.second ?: emptyList()
+                if (recipe != null) emit(Resource.success(recipe to steps))
+                else emit(Resource.failure(message = "Recipe not found"))
+            }
+            is Resource.Failure -> emit(Resource.failure(result.error, result.message))
+            is Resource.Loading -> { /* already emitted */ }
+        }
+    }
+
     override fun getRecipesByCreator(creatorId: String): Flow<List<Recipe>> {
         return service.getRecipesByCreatorFlow(creatorId)
     }
