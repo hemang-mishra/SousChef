@@ -167,8 +167,8 @@ internal fun Step1Details(
         // Tags
         PremiumSectionHeader(title = "Tags")
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             RecipeTag.entries.forEach { tag ->
                 SousChefFilterChip(

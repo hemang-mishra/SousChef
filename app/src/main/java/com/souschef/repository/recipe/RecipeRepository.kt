@@ -13,6 +13,7 @@ interface RecipeRepository {
     fun createRecipe(recipe: Recipe): Flow<Resource<String>>
     fun updateRecipe(recipeId: String, updates: Map<String, Any>): Flow<Resource<Unit>>
     fun getRecipe(recipeId: String): Flow<Resource<Recipe>>
+    fun getRecipeWithSteps(recipeId: String): Flow<Resource<Pair<Recipe, List<RecipeStep>>>>
     fun getRecipesByCreator(creatorId: String): Flow<List<Recipe>>
     fun addStep(recipeId: String, step: RecipeStep): Flow<Resource<Unit>>
     fun getSteps(recipeId: String): Flow<Resource<List<RecipeStep>>>

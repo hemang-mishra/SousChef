@@ -43,7 +43,8 @@ fun HomeScreen(
     onCreateRecipe: () -> Unit,
     onSignOut: () -> Unit,
     onDesignTest: () -> Unit,
-    onIngredientLibrary: () -> Unit = {}
+    onIngredientLibrary: () -> Unit = {},
+    onTestOverview: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -132,6 +133,10 @@ fun HomeScreen(
             Spacer(Modifier.height(16.dp))
 
             GhostButton(text = "Sign Out", onClick = onSignOut)
+
+            Spacer(Modifier.height(16.dp))
+
+            GhostButton(text = "Test Overview (DEBUG)", onClick = onTestOverview)
         }
     }
 }
@@ -148,7 +153,8 @@ private fun HomeScreenPreview() {
             onCreateRecipe = {},
             onSignOut = {},
             onDesignTest = {},
-            onIngredientLibrary = {}
+                onIngredientLibrary = {},
+                onTestOverview = {}
         )
     }
 }

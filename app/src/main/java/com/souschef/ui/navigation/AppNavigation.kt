@@ -28,6 +28,8 @@ import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientViewModel
 import com.souschef.ui.screens.ingredient.library.IngredientLibraryScreen
 import com.souschef.ui.screens.recipe.create.CreateRecipeScreen
 import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
+import com.souschef.ui.screens.recipe.overview.RecipeOverviewScreen
+import com.souschef.ui.screens.recipe.overview.RecipeOverviewViewModel
 import com.souschef.ui.theme.SousChefTheme
 import com.souschef.ui.viewmodels.AppViewModel
 import org.koin.compose.koinInject
@@ -124,7 +126,8 @@ fun AppNavigation() {
                     onCreateRecipe = { backstack.add(Screens.NavCreateRecipeRoute) },
                     onSignOut = { appViewModel.signOut() },
                     onDesignTest = { backstack.add(Screens.NavDesignTestRoute) },
-                    onIngredientLibrary = { backstack.add(Screens.NavIngredientLibraryRoute) }
+                    onIngredientLibrary = { backstack.add(Screens.NavIngredientLibraryRoute) },
+                    onTestOverview = { backstack.add(Screens.NavRecipeOverviewRoute("test_recipe_id")) }
                 )
             }
 
@@ -135,8 +138,8 @@ fun AppNavigation() {
                 CreateRecipeScreen(
                     onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
                     onRecipeSaved = { recipeId ->
-                        // Pop back to home after save
                         if (backstack.size > 1) backstack.removeAt(backstack.size - 1)
+                        backstack.add(Screens.NavRecipeOverviewRoute(recipeId))
                     },
                     viewModel = viewModel
                 )
@@ -172,7 +175,24 @@ fun AppNavigation() {
 
             // ── Recipe Detail / Overview (Phase 3) ───────
             entry<Screens.NavRecipeDetailRoute> { PlaceholderScreen("Recipe Detail — Phase 3") }
-            entry<Screens.NavRecipeOverviewRoute> { PlaceholderScreen("Recipe Overview — Phase 3") }
+            entry<Screens.NavRecipeOverviewRoute> { route ->
+                val viewModel: RecipeOverviewViewModel = koinInject { parametersOf(route.recipeId) }
+                RecipeOverviewScreen(
+                    onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                    onStartCooking = { servings, spice, salt, sweetness ->
+                        backstack.add(
+                            Screens.NavCookingModeRoute(
+                                recipeId = route.recipeId,
+                                selectedServings = servings,
+                                spiceLevel = spice,
+                                saltLevel = salt,
+                                sweetnessLevel = sweetness
+                            )
+                        )
+                    },
+                    viewModel = viewModel
+                )
+            }
             entry<Screens.NavCookingModeRoute> { PlaceholderScreen("Cooking Mode — Phase 4") }
 
             // ── Saved / Profile (Phase 7) ────────────────

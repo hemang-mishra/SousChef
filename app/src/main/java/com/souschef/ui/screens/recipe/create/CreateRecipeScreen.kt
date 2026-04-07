@@ -335,7 +335,6 @@ private fun PremiumStepIndicator(
                         else -> AppColors.textTertiary()
                     },
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
                 )
             }
         }
