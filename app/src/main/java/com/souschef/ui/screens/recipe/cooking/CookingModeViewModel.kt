@@ -9,6 +9,7 @@ import com.souschef.model.recipe.ResolvedIngredient
 import com.souschef.repository.ingredient.IngredientRepository
 import com.souschef.repository.recipe.RecipeRepository
 import com.souschef.usecases.device.DispenseSpiceUseCase
+import com.souschef.usecases.device.GetCompartmentsUseCase
 import com.souschef.usecases.recipe.CookingSessionUseCase
 import com.souschef.usecases.recipe.RecipeCalculationUseCase
 import com.souschef.util.Resource
@@ -36,6 +37,7 @@ import kotlinx.coroutines.launch
 class CookingModeViewModel(
     private val recipeRepository: RecipeRepository,
     private val ingredientRepository: IngredientRepository,
+    private val getCompartmentsUseCase: GetCompartmentsUseCase,
     private val calculationUseCase: RecipeCalculationUseCase,
     private val dispenseSpiceUseCase: DispenseSpiceUseCase,
     private val bleDeviceManager: BleDeviceManager,
@@ -54,6 +56,8 @@ class CookingModeViewModel(
     private val _adjustedIngredients    = MutableStateFlow<List<ResolvedIngredient>>(emptyList())
     private val _stepIngredientMap      = MutableStateFlow<Map<Int, ResolvedIngredient>>(emptyMap())
     private val _isFinished             = MutableStateFlow(false)
+    private val _loadedCompartmentIngredientIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _loadedCompartmentIngredientNames = MutableStateFlow<Set<String>>(emptySet())
     private val _dispensingIds          = MutableStateFlow<Set<String>>(emptySet())
     private val _lastDispenseResult     = MutableStateFlow<DispenseResult?>(null)
 
@@ -83,18 +87,27 @@ class CookingModeViewModel(
             TimerSnapshot(stepIndex, timer, running, finished)
         },
         bleDeviceManager.connectionState,
-        _dispensingIds,
-        combine(_lastDispenseResult, _stepIngredientMap) { result, map -> result to map }
-    ) { base, timer, bleState, dispensingIds, resultAndMap ->
+        combine(
+            _dispensingIds,
+            _loadedCompartmentIngredientIds,
+            _loadedCompartmentIngredientNames,
+            _lastDispenseResult,
+            _stepIngredientMap
+        ) { dispensingIds, loadedIds, loadedNames, result, map ->
+            DispenseState(dispensingIds, loadedIds, loadedNames, result, map)
+        }
+    ) { base, timer, bleState, dispenseState ->
         base.copy(
             currentStepIndex    = timer.stepIndex,
             timerMillisRemaining = timer.millis,
             isTimerRunning      = timer.running,
             timerFinished       = timer.finished,
             connectionState     = bleState,
-            dispensingIngredientIds = dispensingIds,
-            lastDispenseResult  = resultAndMap.first,
-            stepIngredientMap   = resultAndMap.second
+            loadedCompartmentIngredientIds = dispenseState.loadedIds,
+            loadedCompartmentIngredientNames = dispenseState.loadedNames,
+            dispensingIngredientIds = dispenseState.dispensingIds,
+            lastDispenseResult  = dispenseState.result,
+            stepIngredientMap   = dispenseState.map
         )
     }.stateIn(
         scope        = viewModelScope,
@@ -104,9 +117,24 @@ class CookingModeViewModel(
 
     init {
         loadData()
+        loadCompartments()
     }
 
     // ── Data Loading ────────────────────────────────────────────────────────
+    
+    private fun loadCompartments() {
+        viewModelScope.launch(Dispatchers.IO) {
+            getCompartmentsUseCase.execute().collect { resource ->
+                if (resource is Resource.Success) {
+                    val compartments = resource.data
+                    val loadedIds = compartments.mapNotNull { it.globalIngredientId }.toSet()
+                    val loadedNames = compartments.mapNotNull { it.ingredientName?.lowercase() }.toSet()
+                    _loadedCompartmentIngredientIds.value = loadedIds
+                    _loadedCompartmentIngredientNames.value = loadedNames
+                }
+            }
+        }
+    }
 
     private fun loadData() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -184,9 +212,26 @@ class CookingModeViewModel(
         val ingredientById = adjustedIngredients.associateBy { it.globalIngredientId }
         val map = mutableMapOf<Int, ResolvedIngredient>()
         steps.forEachIndexed { index, step ->
-            val ingId = step.effectiveIngredientId
-            if (ingId != null) {
-                val ingredient = ingredientById[ingId]
+            val ingIdOrName = step.effectiveIngredientId
+            if (ingIdOrName != null) {
+                // Try to find by explicit global ID first
+                var ingredient = ingredientById[ingIdOrName]
+                
+                // Fallback for legacy recipes where effectiveIngredientId holds a raw name
+                if (ingredient == null) {
+                    ingredient = adjustedIngredients.find { it.name.equals(ingIdOrName, ignoreCase = true) }
+                }
+
+                // Ultimate fallback: if the ingredient is entirely missing from the recipe payload, mock it so the UI doesn't crash/hide
+                if (ingredient == null && ingIdOrName.isNotBlank()) {
+                    ingredient = ResolvedIngredient(
+                        globalIngredientId = ingIdOrName,
+                        name = step.ingredientId ?: ingIdOrName,
+                        quantity = 1.0,
+                        unit = "unit"
+                    )
+                }
+
                 if (ingredient != null) {
                     // Apply quantityMultiplier for step-specific amount
                     val stepQty = (ingredient.quantity * step.quantityMultiplier * 10)
@@ -265,5 +310,13 @@ class CookingModeViewModel(
         val millis: Long,
         val running: Boolean,
         val finished: Boolean
+    )
+
+    private data class DispenseState(
+        val dispensingIds: Set<String>,
+        val loadedIds: Set<String>,
+        val loadedNames: Set<String>,
+        val result: DispenseResult?,
+        val map: Map<Int, ResolvedIngredient>
     )
 }

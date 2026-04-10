@@ -35,8 +35,15 @@ class RecipeCalculationUseCase {
         sweetnessLevel: Float = 0f
     ): List<ResolvedIngredient> {
         return ingredients.map { ingredient ->
+            
+            val ppq = if (ingredient.perPersonQuantity > 0.0) {
+                ingredient.perPersonQuantity
+            } else {
+                ingredient.quantity / baseServingSize.coerceAtLeast(1).toDouble()
+            }
+
             // 1. Scale by servings
-            var qty = ingredient.perPersonQuantity * selectedServings
+            var qty = ppq * selectedServings
 
             // 2. Apply flavour adjustments (only for ingredients that contribute)
             if (spiceLevel != 0f && ingredient.spiceIntensityValue > 0) {

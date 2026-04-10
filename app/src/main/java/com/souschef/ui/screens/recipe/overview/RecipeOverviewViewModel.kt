@@ -66,9 +66,13 @@ class RecipeOverviewViewModel(
                             }
                         }
 
-                        // 3. Resolve ingredients by joining with global library
-                        val ingredientIds = recipe.ingredients.map { it.globalIngredientId }
-                        if (ingredientIds.isEmpty()) {
+                        // 3. Resolve ingredients
+                        // Older recipes may lack embedded ingredients. Fallback to extracting from steps.
+                        val embeddedIds = recipe.ingredients.map { it.globalIngredientId }.toSet()
+                        val stepIds = steps.mapNotNull { it.effectiveIngredientId }.toSet()
+                        val allIngredientIds = (embeddedIds + stepIds).filter { it.isNotBlank() }
+
+                        if (allIngredientIds.isEmpty()) {
                             _uiState.update {
                                 it.copy(
                                     recipe = recipe,
@@ -82,7 +86,7 @@ class RecipeOverviewViewModel(
                             return@collect
                         }
 
-                        ingredientRepository.getIngredientsByIds(ingredientIds).collect { ingResult ->
+                        ingredientRepository.getIngredientsByIds(allIngredientIds.toList()).collect { ingResult ->
                             when (ingResult) {
                                 is Resource.Loading -> { /* wait */ }
                                 is Resource.Failure -> {
@@ -91,13 +95,28 @@ class RecipeOverviewViewModel(
                                     }
                                 }
                                 is Resource.Success -> {
-                                    val globalMap = (ingResult.data ?: emptyList())
-                                        .associateBy { it.ingredientId }
-                                    val resolved = recipe.ingredients.mapNotNull { ri ->
-                                        globalMap[ri.globalIngredientId]?.let { gi ->
-                                            ResolvedIngredient.from(ri, gi)
-                                        }
+                                    val globalMap = (ingResult.data ?: emptyList()).associateBy { it.ingredientId }
+                                    
+                                    // Map embedded ingredients
+                                    val resolvedEmbedded = recipe.ingredients.mapNotNull { ri ->
+                                        val gi = globalMap[ri.globalIngredientId]
+                                        if (gi != null) ResolvedIngredient.from(ri, gi) else null
                                     }
+
+                                    // Map missing legacy ingredients from steps
+                                    val fallbackResolved = stepIds
+                                        .filter { id -> resolvedEmbedded.none { it.globalIngredientId == id } }
+                                        .map { id ->
+                                            val gi = globalMap[id] ?: ingResult.data?.find { it.name.equals(id, ignoreCase = true) }
+                                            if (gi != null) {
+                                                ResolvedIngredient.from(com.souschef.model.recipe.RecipeIngredient(globalIngredientId = gi.ingredientId, quantity = 1.0, unit = "unit"), gi)
+                                            } else {
+                                                // Ultimate fallback for unresolved string names
+                                                ResolvedIngredient(globalIngredientId = id, name = id, quantity = 1.0, unit = "unit")
+                                            }
+                                        }
+
+                                    val resolved = resolvedEmbedded + fallbackResolved
                                     val adjusted = calculationUseCase.calculate(
                                         resolved, recipe.baseServingSize, recipe.baseServingSize
                                     )

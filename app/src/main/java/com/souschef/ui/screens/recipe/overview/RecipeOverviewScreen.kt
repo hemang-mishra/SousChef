@@ -250,24 +250,46 @@ fun RecipeOverviewContent(
 				onSweetnessLevelChanged = onSweetnessLevelChanged
 			)
 
-			SectionHeader(
-				title = "Ingredients"
-			)
+			val dispensable = uiState.adjustedIngredients.filter { it.isDispensable }
+			val manual = uiState.adjustedIngredients.filter { !it.isDispensable }
 
-			Text(
-				text = "Quantities update instantly",
-				style = MaterialTheme.typography.bodySmall,
-				color = MaterialTheme.colorScheme.onSurfaceVariant,
-				modifier = Modifier.padding(16.dp)
-			)
+			if (dispensable.isNotEmpty()) {
+				SectionHeader(title = "Auto-Dispensable")
+				Text(
+					text = "These ingredients will be automatically handled by your SousChef dispenser.",
+					style = MaterialTheme.typography.bodySmall,
+					color = AppColors.gold(),
+					modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+				)
+				Spacer(modifier = Modifier.height(8.dp))
+				Column(
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(horizontal = 16.dp)
+				) {
+					dispensable.forEach { ingredient ->
+						IngredientQuantityRow(ingredient = ingredient)
+					}
+				}
+			}
 
-			Column(
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = 16.dp)
-			) {
-				uiState.adjustedIngredients.forEach { ingredient ->
-					IngredientQuantityRow(ingredient = ingredient)
+			if (manual.isNotEmpty()) {
+				SectionHeader(title = "Manual Ingredients")
+				Text(
+					text = "Quantities update instantly with serving size changes.",
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+				)
+				Spacer(modifier = Modifier.height(8.dp))
+				Column(
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(horizontal = 16.dp)
+				) {
+					manual.forEach { ingredient ->
+						IngredientQuantityRow(ingredient = ingredient)
+					}
 				}
 			}
 		}

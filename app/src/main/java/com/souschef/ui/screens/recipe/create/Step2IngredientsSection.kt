@@ -2,6 +2,7 @@ package com.souschef.ui.screens.recipe.create
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,6 +77,7 @@ import kotlinx.coroutines.launch
 internal fun Step2Ingredients(
     ingredients: List<RecipeIngredient>,
     globalIngredients: List<GlobalIngredient>,
+    newlyCreatedIngredients: List<String>,
     ingredientError: String?,
     onAddIngredient: (RecipeIngredient) -> Unit,
     onRemoveIngredient: (String) -> Unit,
@@ -130,6 +132,24 @@ internal fun Step2Ingredients(
                 color = AppColors.error(),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+        }
+
+        if (newlyCreatedIngredients.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(AppColors.gold().copy(alpha = 0.1f))
+                    .border(0.5.dp, AppColors.gold(), RoundedCornerShape(8.dp))
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = "✨ AI automatically added new ingredients to your global library: ${newlyCreatedIngredients.joinToString(", ")}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = AppColors.gold()
+                )
+            }
         }
 
         if (ingredients.isEmpty()) {

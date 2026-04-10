@@ -30,7 +30,14 @@ object IngredientMatcher {
         var bestMatch: GlobalIngredient? = null
 
         for (candidate in candidates) {
-            val score = diceCoefficient(normalizedQuery, normalize(candidate.name))
+            val candidateNameNorm = normalize(candidate.name)
+            
+            // Substring or exact match is very strong, especially for short words like 'salt' or 'turmeric'
+            if (normalizedQuery.contains(candidateNameNorm) || candidateNameNorm.contains(normalizedQuery)) {
+                return candidate
+            }
+            
+            val score = diceCoefficient(normalizedQuery, candidateNameNorm)
             if (score > bestScore) {
                 bestScore = score
                 bestMatch = candidate

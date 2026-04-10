@@ -4,12 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.service.device.DevicePreferenceService
 import com.souschef.usecases.device.RefillCompartmentUseCase
-import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -56,14 +56,11 @@ class DispenserSettingsViewModel(
 
     fun onSave() {
         viewModelScope.launch(Dispatchers.IO) {
+            _isSaved.value  = false
             _isSaving.value = true
             _error.value    = null
             try {
-                val current = deviceService.getCompartmentsFlow().let { flow ->
-                    var list = emptyList<com.souschef.model.device.Compartment>()
-                    flow.collect { list = it; return@collect }
-                    list
-                }
+                val current = deviceService.getCompartmentsFlow().first()
                 val edited = _editedCapacities.value
                 val updated = current.map { comp ->
                     val rawCapacity = edited[comp.compartmentId]

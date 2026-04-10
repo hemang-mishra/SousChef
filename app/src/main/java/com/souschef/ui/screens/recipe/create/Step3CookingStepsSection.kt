@@ -124,7 +124,6 @@ internal fun Step3CookingSteps(
             CreateRecipeUiState.StepsStage.INPUT -> StepsInputStage(
                 recipeTitle = uiState.title,
                 aiDescription = uiState.aiDescription,
-                ingredientChips = uiState.ingredientChips,
                 onAiDescriptionChange = onAiDescriptionChange,
                 onGenerateSteps = onGenerateSteps,
                 onAddManualStep = onAddManualStep,
@@ -157,7 +156,6 @@ internal fun Step3CookingSteps(
 private fun StepsInputStage(
     recipeTitle: String,
     aiDescription: String,
-    ingredientChips: List<String>,
     onAiDescriptionChange: (String) -> Unit,
     onGenerateSteps: () -> Unit,
     onAddManualStep: () -> Unit,
@@ -254,34 +252,10 @@ private fun StepsInputStage(
                 Spacer(Modifier.height(16.dp))
 
                 PremiumButton(
-                    text = "✨ Generate Steps with AI",
+                    text = "✨ Generate Recipe with AI",
                     onClick = onGenerateSteps,
                     enabled = aiDescription.isNotBlank()
                 )
-            }
-        }
-
-        // Ingredient chips
-        if (ingredientChips.isNotEmpty()) {
-            PremiumSectionHeader(title = "Ingredients in this recipe")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ingredientChips.forEach { name ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(AppColors.gold().copy(alpha = 0.1f))
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = AppColors.gold()
-                        )
-                    }
-                }
             }
         }
 

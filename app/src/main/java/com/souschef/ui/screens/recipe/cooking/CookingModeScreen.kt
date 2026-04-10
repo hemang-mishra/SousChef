@@ -267,6 +267,8 @@ fun CookingModeScreenLayout(
                     timerMillisRemaining = uiState.timerMillisRemaining,
                     isTimerRunning = uiState.isTimerRunning,
                     timerFinished = uiState.timerFinished,
+                    loadedCompartmentIngredientIds = uiState.loadedCompartmentIngredientIds,
+                    loadedCompartmentIngredientNames = uiState.loadedCompartmentIngredientNames,
                     dispensingIds = uiState.dispensingIngredientIds,
                     onStartTimer = onStartTimer,
                     onPauseTimer = onPauseTimer,
@@ -345,6 +347,8 @@ private fun StepContent(
     timerMillisRemaining: Long,
     isTimerRunning: Boolean,
     timerFinished: Boolean,
+    loadedCompartmentIngredientIds: Set<String>,
+    loadedCompartmentIngredientNames: Set<String>,
     dispensingIds: Set<String>,
     onStartTimer: () -> Unit,
     onPauseTimer: () -> Unit,
@@ -397,9 +401,27 @@ private fun StepContent(
 
         // Ingredient card for this step (single ingredient with dynamic quantity)
         if (stepIngredient != null) {
+            val isLoadedById = loadedCompartmentIngredientIds.contains(stepIngredient.globalIngredientId)
+            val isLoadedByName = loadedCompartmentIngredientNames.any { 
+                stepIngredient.name.lowercase().contains(it) || it.contains(stepIngredient.name.lowercase())
+            }
+            val isLoaded = isLoadedById || isLoadedByName
+            
+            // Generate visual debug information
+            val debugText = StringBuilder().apply {
+                append("ID: ${stepIngredient.globalIngredientId}\n")
+                append("Name: ${stepIngredient.name}\n")
+                append("isDispensable: ${stepIngredient.isDispensable}\n")
+                append("isLoadedById: $isLoadedById\n")
+                append("isLoadedByName: $isLoadedByName\n")
+                append("Loaded Names Available: $loadedCompartmentIngredientNames")
+            }.toString()
+            
             StepIngredientCard(
                 ingredient = stepIngredient,
                 isDispensing = dispensingIds.contains(stepIngredient.globalIngredientId),
+                isLoaded = isLoaded,
+                debugInfo = debugText,
                 onDispense = {
                     onDispense(
                         stepIngredient.globalIngredientId,
@@ -649,6 +671,8 @@ private fun StepTypeBadge(stepType: String) {
 private fun StepIngredientCard(
     ingredient: ResolvedIngredient,
     isDispensing: Boolean,
+    isLoaded: Boolean,
+    debugInfo: String = "",
     onDispense: () -> Unit
 ) {
     GlassCard {
@@ -693,15 +717,17 @@ private fun StepIngredientCard(
                     }
                 }
 
-                // Dispense button for dispensable ingredients
-                if (ingredient.isDispensable) {
+                // Dispense button logic: if it's explicitly marked dispensable, or if it's currently loaded in a compartment
+                if (ingredient.isDispensable || isLoaded) {
                     Spacer(modifier = Modifier.width(12.dp))
                     androidx.compose.material3.Button(
                         onClick = onDispense,
-                        enabled = !isDispensing,
+                        enabled = !isDispensing && isLoaded,
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = AppColors.gold().copy(alpha = 0.15f),
-                            contentColor = AppColors.gold()
+                            containerColor = if (isLoaded) AppColors.gold().copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f),
+                            contentColor = if (isLoaded) AppColors.gold() else Color.Gray,
+                            disabledContainerColor = Color.Gray.copy(alpha = 0.1f),
+                            disabledContentColor = Color.Gray.copy(alpha = 0.5f)
                         ),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             horizontal = 16.dp, vertical = 8.dp
@@ -715,13 +741,17 @@ private fun StepIngredientCard(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Icon(
-                                Icons.Outlined.Science,
-                                contentDescription = "Auto-dispense",
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Dispense", style = MaterialTheme.typography.labelMedium)
+                            if (!isLoaded) {
+                                Text("Not Loaded", style = MaterialTheme.typography.labelMedium)
+                            } else {
+                                Icon(
+                                    Icons.Outlined.Science,
+                                    contentDescription = "Auto-dispense",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Dispense", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
                     }
                 }

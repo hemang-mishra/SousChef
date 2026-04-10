@@ -47,7 +47,7 @@ val viewModelModule = module {
 
     // Cooking mode — factory, needs recipeId + serving/flavour params + Phase 5 dispense deps
     factory { (recipeId: String, servings: Int, spice: Float, salt: Float, sweetness: Float) ->
-        CookingModeViewModel(get(), get(), get(), get(), get(), recipeId, servings, spice, salt, sweetness)
+        CookingModeViewModel(get(), get(), get(), get(), get(), get(), recipeId, servings, spice, salt, sweetness)
     }
 
     // AI Step Generation — now integrated into CreateRecipeViewModel

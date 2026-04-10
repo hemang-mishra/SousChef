@@ -40,6 +40,15 @@ data class CookingModeUiState(
     /** Current BLE connection state with the dispenser. */
     val connectionState: BleConnectionState = BleConnectionState.Disconnected,
 
+    /** 
+     * Set of globalIngredientIds currently loaded in physical compartments.
+     * Used to determine if the dispense button should be visible.
+     */
+    val loadedCompartmentIngredientIds: Set<String> = emptySet(),
+
+    /** Set of lowercase names for loaded compartments (fallback matching). */
+    val loadedCompartmentIngredientNames: Set<String> = emptySet(),
+
     /**
      * Set of globalIngredientIds currently being dispensed (shows spinner on that row).
      * Multiple concurrent dispenses are supported.

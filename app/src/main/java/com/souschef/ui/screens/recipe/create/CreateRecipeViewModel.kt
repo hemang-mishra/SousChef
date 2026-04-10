@@ -30,11 +30,10 @@ import kotlinx.coroutines.launch
 /**
  * Unified ViewModel for the Create / Edit Recipe wizard (4 steps).
  *
- * Merges the old `CreateRecipeViewModel` and `AiStepGenerationViewModel`
- * into a single flow:
+ * ## New Step Order
  *   Step 0 — Details
- *   Step 1 — Ingredients
- *   Step 2 — Cooking Steps (AI / manual, optional)
+ *   Step 1 — Cooking Steps (AI generates steps + extracts ingredients)
+ *   Step 2 — Ingredients (AI-extracted, auto-resolved, editable)
  *   Step 3 — Review & Save
  *
  * Registered as `factory` in Koin.
@@ -53,7 +52,7 @@ class CreateRecipeViewModel(
     private val recipeId: String? = null
 ) : ViewModel() {
 
-    // ── Step 1: Details ──────────────────────────────────────
+    // ── Step 0: Details ──────────────────────────────────────
     private val _currentStep = MutableStateFlow(0)
     private val _title = MutableStateFlow("")
     private val _description = MutableStateFlow("")
@@ -65,16 +64,16 @@ class CreateRecipeViewModel(
     private val _selectedTags = MutableStateFlow<List<RecipeTag>>(emptyList())
     private val _coverImageUri = MutableStateFlow<Uri?>(null)
 
-    // ── Step 2: Ingredients ──────────────────────────────────
-    private val _ingredients = MutableStateFlow<List<RecipeIngredient>>(emptyList())
-    private val _globalIngredients = MutableStateFlow<List<GlobalIngredient>>(emptyList())
-
-    // ── Step 3: Cooking Steps ────────────────────────────────
+    // ── Step 1: Cooking Steps ────────────────────────────────
     private val _aiDescription = MutableStateFlow("")
-    private val _ingredientChips = MutableStateFlow<List<String>>(emptyList())
     private val _steps = MutableStateFlow<List<RecipeStep>>(emptyList())
     private val _stepsStage = MutableStateFlow(CreateRecipeUiState.StepsStage.INPUT)
     private val _isGeneratingSteps = MutableStateFlow(false)
+
+    // ── Step 2: Ingredients (AI-extracted, editable) ─────────
+    private val _ingredients = MutableStateFlow<List<RecipeIngredient>>(emptyList())
+    private val _globalIngredients = MutableStateFlow<List<GlobalIngredient>>(emptyList())
+    private val _newlyCreatedIngredientNames = MutableStateFlow<List<String>>(emptyList())
 
     // ── Validation / Loading ─────────────────────────────────
     private val _titleError = MutableStateFlow<String?>(null)
@@ -86,9 +85,6 @@ class CreateRecipeViewModel(
     private val _generalError = MutableStateFlow<String?>(null)
 
     private val _remoteCoverImageUrl = MutableStateFlow<String?>(null)
-
-    // Cached for AI prompt
-    private var resolvedIngredients: List<ResolvedIngredient> = emptyList()
 
     // ── Combined UI State ────────────────────────────────────
 
@@ -109,8 +105,8 @@ class CreateRecipeViewModel(
             combine(_isSaved, _savedRecipeId, _isUploadingImage, _aiDescription) { saved, id, uploading, aiDesc ->
                 arrayOf<Any?>(saved, id, uploading, aiDesc)
             },
-            combine(_ingredientChips, _steps, _stepsStage, _isGeneratingSteps) { chips, steps, stage, generating ->
-                arrayOf<Any?>(chips, steps, stage, generating)
+            combine(_steps, _stepsStage, _isGeneratingSteps, _newlyCreatedIngredientNames) { steps, stage, generating, newNames ->
+                arrayOf<Any?>(steps, stage, generating, newNames)
             }
         )
     ) { arrays ->
@@ -143,10 +139,10 @@ class CreateRecipeViewModel(
             savedRecipeId = saveData[1] as String?,
             isUploadingImage = saveData[2] as Boolean,
             aiDescription = saveData[3] as String,
-            ingredientChips = stepsData[0] as List<String>,
-            steps = stepsData[1] as List<RecipeStep>,
-            stepsStage = stepsData[2] as CreateRecipeUiState.StepsStage,
-            isGeneratingSteps = stepsData[3] as Boolean
+            steps = stepsData[0] as List<RecipeStep>,
+            stepsStage = stepsData[1] as CreateRecipeUiState.StepsStage,
+            isGeneratingSteps = stepsData[2] as Boolean,
+            newlyCreatedIngredientNames = stepsData[3] as List<String>
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CreateRecipeUiState())
 
@@ -233,17 +229,14 @@ class CreateRecipeViewModel(
     // ── Step Navigation ──────────────────────────────────────
 
     fun onNextStep() {
-        if (_currentStep.value == 0 && !validateStep1()) return
-        if (_currentStep.value == 1 && !validateStep2()) return
-        // Step 2 (cooking steps) has no validation — it's optional
-        if (_currentStep.value < 3) {
-            val nextStep = _currentStep.value + 1
-            _currentStep.value = nextStep
+        // Step 0 (Details) validation
+        if (_currentStep.value == 0 && !validateDetails()) return
+        // Step 1 (Steps) — no validation, it's optional
+        // Step 2 (Ingredients) validation
+        if (_currentStep.value == 2 && !validateIngredients()) return
 
-            // When entering Step 2 (Cooking Steps), resolve ingredient names for AI
-            if (nextStep == 2) {
-                resolveIngredientChips()
-            }
+        if (_currentStep.value < 3) {
+            _currentStep.value = _currentStep.value + 1
         }
     }
 
@@ -251,7 +244,7 @@ class CreateRecipeViewModel(
         if (_currentStep.value > 0) _currentStep.value--
     }
 
-    // ── Step 1: Details ──────────────────────────────────────
+    // ── Step 0: Details ──────────────────────────────────────
 
     fun onTitleChange(title: String) {
         _title.value = title
@@ -301,55 +294,21 @@ class CreateRecipeViewModel(
         _remoteCoverImageUrl.value = null
     }
 
-    // ── Step 2: Ingredients ──────────────────────────────────
-
-    fun onAddIngredient(ingredient: RecipeIngredient) {
-        _ingredients.value = _ingredients.value + ingredient
-        _ingredientError.value = null
-    }
-
-    fun onRemoveIngredient(globalIngredientId: String) {
-        _ingredients.value = _ingredients.value.filter { it.globalIngredientId != globalIngredientId }
-    }
-
-    fun onCreateGlobalIngredientAndAdd(name: String, quantity: Double, unit: String) {
-        val newIngredient = GlobalIngredient(
-            name = name,
-            defaultUnit = unit,
-            createdByUserId = currentUser.uid
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            ingredientRepository.createIngredient(newIngredient).collect { result ->
-                if (result is Resource.Success) {
-                    val newId = result.data
-                    val ri = RecipeIngredient(newId, quantity, unit)
-                    // Must update flow on main thread
-                    launch(Dispatchers.Main) {
-                        onAddIngredient(ri)
-                    }
-                }
-            }
-        }
-    }
-
-    // ── Step 3: Cooking Steps ────────────────────────────────
-
-    /** Resolve ingredient names from IDs for display as chips and AI prompt. */
-    private fun resolveIngredientChips() {
-        val globalMap = _globalIngredients.value.associateBy { it.ingredientId }
-        resolvedIngredients = _ingredients.value.mapNotNull { recipeIngredient ->
-            globalMap[recipeIngredient.globalIngredientId]?.let { global ->
-                ResolvedIngredient.from(recipeIngredient, global)
-            }
-        }
-        _ingredientChips.value = resolvedIngredients.map { it.name }
-    }
+    // ── Step 1: Cooking Steps (AI generates steps + ingredients) ──
 
     fun onAiDescriptionChange(text: String) {
         _aiDescription.value = text
         _generalError.value = null
     }
 
+    /**
+     * Generates both steps AND ingredients from the AI description.
+     * The use case:
+     * 1. Calls Gemini → gets steps + extracted ingredients
+     * 2. Fuzzy-matches ingredients against global library
+     * 3. Auto-creates missing ingredients in Firestore
+     * 4. Returns resolved steps + RecipeIngredient list
+     */
     fun onGenerateSteps() {
         val description = _aiDescription.value
         if (description.isBlank()) {
@@ -362,12 +321,22 @@ class CreateRecipeViewModel(
         _generalError.value = null
 
         viewModelScope.launch(Dispatchers.IO) {
-            generateRecipeStepsUseCase.execute(description, resolvedIngredients).collect { result ->
+            generateRecipeStepsUseCase.execute(
+                description = description,
+                baseServingSize = _baseServingSize.value,
+                creatorUserId = currentUser.uid
+            ).collect { result ->
                 when (result) {
                     is Resource.Success -> {
-                        _steps.value = result.data
+                        val data = result.data
+                        _steps.value = data.steps
+                        _ingredients.value = data.ingredients
+                        _newlyCreatedIngredientNames.value = data.newlyCreatedIngredients
                         _isGeneratingSteps.value = false
                         _stepsStage.value = CreateRecipeUiState.StepsStage.REVIEW
+
+                        // Refresh global ingredients list (includes newly created ones)
+                        loadGlobalIngredients()
                     }
                     is Resource.Failure -> {
                         _isGeneratingSteps.value = false
@@ -479,10 +448,42 @@ class CreateRecipeViewModel(
         }
     }
 
-    // ── Step 4: Save ─────────────────────────────────────────
+    // ── Step 2: Ingredients (editable after AI extraction) ────
+
+    fun onAddIngredient(ingredient: RecipeIngredient) {
+        _ingredients.value = _ingredients.value + ingredient
+        _ingredientError.value = null
+    }
+
+    fun onRemoveIngredient(globalIngredientId: String) {
+        _ingredients.value = _ingredients.value.filter { it.globalIngredientId != globalIngredientId }
+    }
+
+    fun onCreateGlobalIngredientAndAdd(name: String, quantity: Double, unit: String) {
+        val newIngredient = GlobalIngredient(
+            name = name,
+            defaultUnit = unit,
+            createdByUserId = currentUser.uid
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            ingredientRepository.createIngredient(newIngredient).collect { result ->
+                if (result is Resource.Success) {
+                    val newId = result.data
+                    val ri = RecipeIngredient(newId, quantity, unit)
+                    launch(Dispatchers.Main) {
+                        onAddIngredient(ri)
+                    }
+                    // Refresh global list
+                    loadGlobalIngredients()
+                }
+            }
+        }
+    }
+
+    // ── Step 3: Save ─────────────────────────────────────────
 
     fun onSave(publish: Boolean) {
-        if (!validateStep1() || !validateStep2()) {
+        if (!validateDetails() || !validateIngredients()) {
             _generalError.value = "Please complete all required fields."
             return
         }
@@ -537,7 +538,6 @@ class CreateRecipeViewModel(
                 ).collect { result ->
                     when (result) {
                         is Resource.Success -> {
-                            // Now save steps if any
                             saveStepsAndFinish(recipeId)
                         }
                         is Resource.Failure -> {
@@ -564,7 +564,6 @@ class CreateRecipeViewModel(
                     when (result) {
                         is Resource.Success -> {
                             val newRecipeId = result.data
-                            // Now save steps if any
                             saveStepsAndFinish(newRecipeId)
                         }
                         is Resource.Failure -> {
@@ -582,7 +581,6 @@ class CreateRecipeViewModel(
     private suspend fun saveStepsAndFinish(finalRecipeId: String) {
         val stepsToSave = _steps.value
         if (stepsToSave.isEmpty()) {
-            // No steps — we're done
             _savedRecipeId.value = finalRecipeId
             _isSaved.value = true
             _isLoading.value = false
@@ -611,7 +609,7 @@ class CreateRecipeViewModel(
 
     // ── Validation ───────────────────────────────────────────
 
-    private fun validateStep1(): Boolean {
+    private fun validateDetails(): Boolean {
         if (_title.value.isBlank()) {
             _titleError.value = "Recipe title is required"
             return false
@@ -619,7 +617,7 @@ class CreateRecipeViewModel(
         return true
     }
 
-    private fun validateStep2(): Boolean {
+    private fun validateIngredients(): Boolean {
         if (_ingredients.value.isEmpty()) {
             _ingredientError.value = "Add at least one ingredient"
             return false

@@ -4,26 +4,45 @@ import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.souschef.api.GeminiRecipePrompt
 import com.souschef.model.recipe.RecipeStep
-import com.souschef.model.recipe.ResolvedIngredient
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 private const val TAG = "GeminiRecipeService"
 
 /**
- * Service that communicates with the Gemini API to generate recipe steps.
- * Handles prompt construction, API call, and JSON response parsing.
+ * Service that communicates with the Gemini API to generate a complete recipe
+ * (steps + ingredients) from a free-text description.
  *
+ * Handles prompt construction, API call, and JSON response parsing.
  * This service performs raw API calls — no business logic.
- * Repository wraps these calls in Resource<T>.
  */
 class GeminiRecipeService(
     private val model: GenerativeModel
 ) {
 
+    // ── DTOs for JSON parsing ────────────────────────────────────────────────
+
     /**
-     * Internal DTO matching the JSON structure returned by Gemini.
-     * Used only for parsing; mapped to [RecipeStep] afterwards.
+     * Top-level response wrapper containing both ingredients and steps.
+     */
+    @Serializable
+    private data class GeminiRecipeResponse(
+        val ingredients: List<GeminiIngredient> = emptyList(),
+        val steps: List<GeminiStep> = emptyList()
+    )
+
+    /**
+     * Ingredient extracted by Gemini from the recipe description.
+     */
+    @Serializable
+    data class GeminiIngredient(
+        val name: String = "",
+        val quantity: Double = 0.0,
+        val unit: String = "grams"
+    )
+
+    /**
+     * Internal DTO matching the step JSON structure returned by Gemini.
      */
     @Serializable
     private data class GeminiStep(
@@ -34,9 +53,7 @@ class GeminiRecipeService(
         val quantityMultiplier: Double = 1.0,
         val timerSeconds: Int? = null,
         val flameLevel: String? = null,
-        val expectedVisualCue: String? = null,
-        // Legacy field — ignored for new steps, kept for lenient parsing
-        val ingredientReferences: List<String>? = null
+        val expectedVisualCue: String? = null
     )
 
     private val json = Json {
@@ -46,19 +63,27 @@ class GeminiRecipeService(
     }
 
     /**
-     * Generates atomic cooking steps from a recipe description using Gemini.
+     * Result type combining both extracted ingredients and parsed steps.
+     */
+    data class GeneratedRecipe(
+        val ingredients: List<GeminiIngredient>,
+        val steps: List<RecipeStep>
+    )
+
+    /**
+     * Generates a complete recipe (steps + ingredients) from a description using Gemini.
      *
-     * @param recipeDescription Free-text recipe instructions from the creator.
-     * @param ingredients Resolved ingredient list for context.
-     * @return Parsed list of [RecipeStep] objects.
+     * @param recipeDescription Free-text recipe description from the creator.
+     * @param baseServingSize   Number of servings for quantity calculation.
+     * @return [GeneratedRecipe] containing both extracted ingredients and parsed steps.
      * @throws GeminiParseException if the response cannot be parsed as JSON.
      * @throws Exception for network or API errors.
      */
-    suspend fun generateSteps(
+    suspend fun generateRecipe(
         recipeDescription: String,
-        ingredients: List<ResolvedIngredient>
-    ): List<RecipeStep> {
-        val prompt = GeminiRecipePrompt.buildPrompt(recipeDescription, ingredients)
+        baseServingSize: Int
+    ): GeneratedRecipe {
+        val prompt = GeminiRecipePrompt.buildPrompt(recipeDescription, baseServingSize)
 
         Log.d(TAG, "Sending prompt to Gemini (${prompt.length} chars)")
 
@@ -66,16 +91,16 @@ class GeminiRecipeService(
         val responseText = response.text
             ?: throw GeminiParseException("Gemini returned an empty response.")
 
-        Log.d(TAG, "Received response: ${responseText.take(200)}...")
+        Log.d(TAG, "Received response: ${responseText.take(300)}...")
 
-        return parseSteps(responseText)
+        return parseRecipe(responseText)
     }
 
     /**
-     * Parses the raw text response from Gemini into a list of [RecipeStep].
+     * Parses the raw text response from Gemini into a [GeneratedRecipe].
      * Handles common Gemini quirks like markdown code fences wrapping the JSON.
      */
-    private fun parseSteps(rawText: String): List<RecipeStep> {
+    private fun parseRecipe(rawText: String): GeneratedRecipe {
         // Strip markdown code fences if Gemini wraps the response
         val cleaned = rawText
             .trim()
@@ -85,9 +110,9 @@ class GeminiRecipeService(
             .trim()
 
         return try {
-            val geminiSteps: List<GeminiStep> = json.decodeFromString(cleaned)
+            val geminiResponse: GeminiRecipeResponse = json.decodeFromString(cleaned)
 
-            geminiSteps.map { step ->
+            val parsedSteps = geminiResponse.steps.map { step ->
                 val validStepType = step.stepType.uppercase().takeIf {
                     it in listOf("INGREDIENT", "ACTION", "PREP")
                 } ?: "ACTION"
@@ -106,11 +131,16 @@ class GeminiRecipeService(
                     expectedVisualCue = step.expectedVisualCue
                 )
             }.sortedBy { it.stepNumber }
+
+            GeneratedRecipe(
+                ingredients = geminiResponse.ingredients,
+                steps = parsedSteps
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse Gemini response: ${e.message}", e)
             Log.e(TAG, "Raw response was: $cleaned")
             throw GeminiParseException(
-                "Failed to parse AI-generated steps. Please try again.",
+                "Failed to parse AI-generated recipe. Please try again.",
                 e
             )
         }
@@ -118,7 +148,7 @@ class GeminiRecipeService(
 }
 
 /**
- * Exception thrown when Gemini's response cannot be parsed as valid step JSON.
+ * Exception thrown when Gemini's response cannot be parsed as valid JSON.
  */
 class GeminiParseException(
     message: String,

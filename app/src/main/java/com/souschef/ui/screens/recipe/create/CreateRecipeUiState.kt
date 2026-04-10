@@ -9,10 +9,10 @@ import com.souschef.model.recipe.RecipeTag
 /**
  * UI state for the unified Create / Edit Recipe wizard.
  *
- * ## Steps
+ * ## Steps (New Order)
  * 0 — Details  (title, description, servings, tags, cover image)
- * 1 — Ingredients  (pick from global library)
- * 2 — Cooking Steps  (AI-generate or add manually — **optional, skippable**)
+ * 1 — Cooking Steps  (AI-generate or add manually)
+ * 2 — Ingredients  (AI-extracted, auto-resolved, editable)
  * 3 — Review & Save
  */
 data class CreateRecipeUiState(
@@ -20,7 +20,7 @@ data class CreateRecipeUiState(
     val currentStep: Int = 0,
     val totalSteps: Int = 4,
 
-    // ── Step 1: Recipe Details ───────────────────────────────
+    // ── Step 0: Recipe Details ───────────────────────────────
     val title: String = "",
     val description: String = "",
     val baseServingSize: Int = 4,
@@ -31,16 +31,17 @@ data class CreateRecipeUiState(
     val selectedTags: List<RecipeTag> = emptyList(),
     val coverImageUri: Uri? = null,
 
-    // ── Step 2: Ingredients ─────────────────────────────────
-    val ingredients: List<RecipeIngredient> = emptyList(),
-    val globalIngredients: List<GlobalIngredient> = emptyList(),
-
-    // ── Step 3: Cooking Steps (AI / Manual) ─────────────────
+    // ── Step 1: Cooking Steps (AI / Manual) ─────────────────
     val aiDescription: String = "",
-    val ingredientChips: List<String> = emptyList(),
     val steps: List<RecipeStep> = emptyList(),
     val stepsStage: StepsStage = StepsStage.INPUT,
     val isGeneratingSteps: Boolean = false,
+
+    // ── Step 2: Ingredients (AI-extracted, editable) ─────────
+    val ingredients: List<RecipeIngredient> = emptyList(),
+    val globalIngredients: List<GlobalIngredient> = emptyList(),
+    /** Names of ingredients auto-created during AI generation (for user feedback). */
+    val newlyCreatedIngredientNames: List<String> = emptyList(),
 
     // ── Validation ──────────────────────────────────────────
     val titleError: String? = null,
@@ -53,7 +54,7 @@ data class CreateRecipeUiState(
     val savedRecipeId: String? = null,
     val generalError: String? = null
 ) {
-    val stepLabels: List<String> = listOf("Details", "Ingredients", "Steps", "Review")
+    val stepLabels: List<String> = listOf("Details", "Steps", "Ingredients", "Review")
     val canGoNext: Boolean get() = currentStep < totalSteps - 1
     val canGoBack: Boolean get() = currentStep > 0
 

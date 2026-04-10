@@ -52,7 +52,12 @@ class DispenseSpiceUseCase(
 
         // 2. Find matching compartment
         val compartments = deviceService.getCompartmentsFlow().first()
-        val compartment = compartments.firstOrNull { it.globalIngredientId == globalIngredientId }
+        val compartment = compartments.firstOrNull { 
+            it.globalIngredientId == globalIngredientId || 
+            (it.ingredientName != null && (it.ingredientName.lowercase().contains(ingredientName.lowercase()) ||
+            ingredientName.lowercase().contains(it.ingredientName.lowercase())))
+        }
+        
         if (compartment == null) {
             emit(Resource.success(DispenseResult.NotInDevice))
             return@flow

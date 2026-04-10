@@ -21,8 +21,22 @@ class GeminiAiRepository(
     ): Flow<Resource<List<RecipeStep>>> = flow {
         emit(Resource.loading())
         try {
-            val steps = service.generateSteps(description, ingredients)
-            emit(Resource.success(steps))
+            // Use the new combined method, but only return steps
+            val result = service.generateRecipe(description, baseServingSize = 4)
+            emit(Resource.success(result.steps))
+        } catch (e: Exception) {
+            emit(Resource.failure(message = e.message ?: "AI generation failed. Please try again."))
+        }
+    }
+
+    override fun generateRecipeWithIngredients(
+        description: String,
+        baseServingSize: Int
+    ): Flow<Resource<GeminiRecipeService.GeneratedRecipe>> = flow {
+        emit(Resource.loading())
+        try {
+            val result = service.generateRecipe(description, baseServingSize)
+            emit(Resource.success(result))
         } catch (e: Exception) {
             emit(Resource.failure(message = e.message ?: "AI generation failed. Please try again."))
         }
