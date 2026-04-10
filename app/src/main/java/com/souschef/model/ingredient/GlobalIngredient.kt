@@ -4,6 +4,7 @@ package com.souschef.model.ingredient
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.PropertyName
 
 /**
  * Firestore document model for a global ingredient.
@@ -20,7 +21,9 @@ data class GlobalIngredient(
     val name: String = "",
     val imageUrl: String? = null,
     val defaultUnit: String = "grams",
-    val isDispensable: Boolean = false,
+    @get:PropertyName("isDispensable")
+    @set:PropertyName("isDispensable")
+    var isDispensable: Boolean = false,
     val spiceIntensityValue: Double = 0.0,
     val sweetnessValue: Double = 0.0,
     val saltnessValue: Double = 0.0,

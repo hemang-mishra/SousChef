@@ -51,7 +51,7 @@ import org.koin.core.parameter.parametersOf
 private val BOTTOM_NAV_ROUTES = setOf(
     Screens.NavHomeRoute::class,
     Screens.NavSavedRecipesRoute::class,
-    Screens.NavIngredientLibraryRoute::class,
+    Screens.NavDispenserRoute::class,
     Screens.NavProfileRoute::class
 )
 
@@ -246,6 +246,24 @@ fun AppNavigation() {
                 entry<Screens.NavDesignTestRoute> {
                     DesignTestScreen(
                         onNavigateHome = { backstack.add(Screens.NavHomeRoute) }
+                    )
+                }
+
+                // ── Phase 5: Hardware Integration (Dispenser) ────────────────
+                entry<Screens.NavDispenserRoute> {
+                    val viewModel: com.souschef.ui.screens.device.dispenser.DispenserViewModel = koinInject()
+                    com.souschef.ui.screens.device.dispenser.DispenserScreen(
+                        viewModel = viewModel,
+                        onNavigateToSettings = { backstack.add(Screens.NavDispenserSettingsRoute) }
+                    )
+                }
+
+                entry<Screens.NavDispenserSettingsRoute> {
+                    val viewModel: com.souschef.ui.screens.device.settings.DispenserSettingsViewModel = koinInject()
+                    com.souschef.ui.screens.device.settings.DispenserSettingsScreen(
+                        viewModel = viewModel,
+                        onBackPress = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
+                        onNavigateToGlobalIngredients = { backstack.add(Screens.NavIngredientLibraryRoute) }
                     )
                 }
 
