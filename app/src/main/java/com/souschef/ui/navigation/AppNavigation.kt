@@ -263,7 +263,16 @@ fun AppNavigation() {
                     com.souschef.ui.screens.device.settings.DispenserSettingsScreen(
                         viewModel = viewModel,
                         onBackPress = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) },
-                        onNavigateToGlobalIngredients = { backstack.add(Screens.NavIngredientLibraryRoute) }
+                        onNavigateToGlobalIngredients = { backstack.add(Screens.NavIngredientLibraryRoute) },
+                        onNavigateToHardwareTest = { backstack.add(Screens.NavHardwareTestRoute) }
+                    )
+                }
+
+                entry<Screens.NavHardwareTestRoute> {
+                    val viewModel: com.souschef.ui.screens.device.settings.HardwareTestViewModel = koinInject()
+                    com.souschef.ui.screens.device.settings.HardwareTestScreen(
+                        viewModel = viewModel,
+                        onBackPress = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) }
                     )
                 }
 

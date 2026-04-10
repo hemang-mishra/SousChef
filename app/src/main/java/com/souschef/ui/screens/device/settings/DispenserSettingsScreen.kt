@@ -56,6 +56,7 @@ fun DispenserSettingsScreen(
     viewModel: DispenserSettingsViewModel,
     onBackPress: () -> Unit,
     onNavigateToGlobalIngredients: () -> Unit,
+    onNavigateToHardwareTest: () -> Unit,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -76,6 +77,7 @@ fun DispenserSettingsScreen(
         onSave            = viewModel::onSave,
         onResetAllCounts  = viewModel::onResetAllCounts,
         onNavigateToGlobalIngredients = onNavigateToGlobalIngredients,
+        onNavigateToHardwareTest = onNavigateToHardwareTest,
         onBackPress       = onBackPress,
         snackbarHostState = snackbarHostState
     )
@@ -91,6 +93,7 @@ fun DispenserSettingsScreenLayout(
     onSave: () -> Unit,
     onResetAllCounts: () -> Unit,
     onNavigateToGlobalIngredients: () -> Unit,
+    onNavigateToHardwareTest: () -> Unit,
     onBackPress: () -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
@@ -166,6 +169,19 @@ fun DispenserSettingsScreenLayout(
                 }
                 Text(
                     text = "Use this after you've physically refilled all compartments.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.textTertiary()
+                )
+                
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = onNavigateToHardwareTest,
+                    colors = ButtonDefaults.textButtonColors(contentColor = AppColors.gold())
+                ) {
+                    Text("Hardware Test Mode")
+                }
+                Text(
+                    text = "Directly trigger dispenser commands to test physical hardware.",
                     style = MaterialTheme.typography.bodySmall,
                     color = AppColors.textTertiary()
                 )
@@ -312,6 +328,7 @@ private fun DispenserSettingsPreview() {
             onSave           = {},
             onResetAllCounts = {},
             onNavigateToGlobalIngredients = {},
+            onNavigateToHardwareTest = {},
             onBackPress      = {},
             snackbarHostState = remember { SnackbarHostState() }
         )

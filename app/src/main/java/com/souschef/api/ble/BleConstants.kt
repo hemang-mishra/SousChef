@@ -15,7 +15,7 @@ import java.util.UUID
 object BleConstants {
 
     /** Advertised device name the app scans for. */
-    const val DEVICE_NAME = "SousChef-Dispenser"
+    const val DEVICE_NAME = "SousChef"
 
     /** Scan timeout in milliseconds before giving up. */
     const val SCAN_TIMEOUT_MS = 15_000L

@@ -4,6 +4,7 @@ import com.souschef.ui.screens.auth.login.LoginViewModel
 import com.souschef.ui.screens.auth.signup.SignUpViewModel
 import com.souschef.ui.screens.device.dispenser.DispenserViewModel
 import com.souschef.ui.screens.device.settings.DispenserSettingsViewModel
+import com.souschef.ui.screens.device.settings.HardwareTestViewModel
 import com.souschef.ui.screens.home.HomeViewModel
 import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientViewModel
 import com.souschef.ui.screens.ingredient.library.IngredientLibraryViewModel
@@ -70,4 +71,7 @@ val viewModelModule = module {
 
     // Dispenser settings — factory
     factory { DispenserSettingsViewModel(get(), get()) }
+
+    // Hardware Test
+    factory { HardwareTestViewModel(get()) }
 }

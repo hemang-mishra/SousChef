@@ -49,6 +49,7 @@ sealed interface Screens : NavKey {
     // ── Hardware Integration (Phase 5) ───────────────────
     @Serializable data object NavDispenserRoute : Screens
     @Serializable data object NavDispenserSettingsRoute : Screens
+    @Serializable data object NavHardwareTestRoute : Screens
 
     // ── Admin (Phase 8+) ─────────────────────────────────
     @Serializable data object NavAdminRoute : Screens

@@ -13,6 +13,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.souschef.model.device.BleConnectionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -121,10 +122,12 @@ class BleDeviceManager(private val context: Context) {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when {
                 newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS -> {
+                    Log.d("BleDeviceManager", "GATT Connected! Discovering services...")
                     _connectionState.value = BleConnectionState.Connecting
                     gatt.discoverServices()
                 }
                 newState == BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.d("BleDeviceManager", "GATT Disconnected.")
                     this@BleDeviceManager.gatt?.close()
                     this@BleDeviceManager.gatt = null
                     dispenseCharacteristic = null
@@ -156,6 +159,8 @@ class BleDeviceManager(private val context: Context) {
                     BleConnectionState.Error("Dispense characteristic not found")
                 return
             }
+            
+            Log.d("BleDeviceManager", "✅ Device fully connected and characteristic assigned!")
             _connectionState.value = BleConnectionState.Connected
         }
 
@@ -164,6 +169,7 @@ class BleDeviceManager(private val context: Context) {
             characteristic: BluetoothGattCharacteristic,
             status: Int
         ) {
+            Log.d("BleDeviceManager", "onCharacteristicWrite callback fired. Status = $status (0=Success)")
             // Future: notify a pending callback/channel on write completion
         }
     }
@@ -187,9 +193,24 @@ class BleDeviceManager(private val context: Context) {
 
         // 2-byte payload: [compartmentId, count]
         val payload = byteArrayOf(compartmentId.toByte(), count.toByte())
-        characteristic.value = payload
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        
+        Log.d("BleDeviceManager", "Preparing to write [${payload[0]}, ${payload[1]}] to characteristic...")
 
-        return currentGatt.writeCharacteristic(characteristic)
+        // Use modern API if available, else fallback
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val result = currentGatt.writeCharacteristic(
+                characteristic, 
+                payload, 
+                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            )
+            Log.d("BleDeviceManager", "TIRAMISU writeCharacteristic returned status code: $result (0=Success)")
+            return result == BluetoothGatt.GATT_SUCCESS
+        } else {
+            characteristic.value = payload
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            val initiated = currentGatt.writeCharacteristic(characteristic)
+            Log.d("BleDeviceManager", "Legacy writeCharacteristic initiated: $initiated")
+            return initiated
+        }
     }
 }
