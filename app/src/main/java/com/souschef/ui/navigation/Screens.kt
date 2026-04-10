@@ -43,6 +43,9 @@ sealed interface Screens : NavKey {
     @Serializable data object NavIngredientLibraryRoute : Screens
     @Serializable data class NavAddEditIngredientRoute(val ingredientId: String? = null) : Screens
 
+    // ── AI Recipe Generation (Phase 6) ───────────────────
+    @Serializable data class NavAiStepGenerationRoute(val recipeId: String) : Screens
+
     // ── Admin (Phase 8+) ─────────────────────────────────
     @Serializable data object NavAdminRoute : Screens
 }

@@ -1,5 +1,7 @@
 package com.souschef.di
 
+import com.souschef.repository.ai.AiRepository
+import com.souschef.repository.ai.GeminiAiRepository
 import com.souschef.repository.auth.AuthRepository
 import com.souschef.repository.auth.FirebaseAuthRepository
 import com.souschef.repository.ingredient.FirestoreIngredientRepository
@@ -15,4 +17,5 @@ val repositoryModule = module {
     single<AuthRepository> { FirebaseAuthRepository(get()) }
     single<RecipeRepository> { FirestoreRecipeRepository(get()) }
     single<IngredientRepository> { FirestoreIngredientRepository(get()) }
+    single<AiRepository> { GeminiAiRepository(get()) }
 }

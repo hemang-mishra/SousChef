@@ -4,8 +4,10 @@ import com.souschef.usecases.ingredient.AddGlobalIngredientUseCase
 import com.souschef.usecases.ingredient.GetIngredientsUseCase
 import com.souschef.usecases.ingredient.UpdateGlobalIngredientUseCase
 import com.souschef.usecases.recipe.CreateRecipeUseCase
+import com.souschef.usecases.recipe.GenerateRecipeStepsUseCase
 import com.souschef.usecases.recipe.PublishRecipeUseCase
 import com.souschef.usecases.recipe.RecipeCalculationUseCase
+import com.souschef.usecases.recipe.SaveRecipeStepsUseCase
 import org.koin.dsl.module
 
 /**
@@ -18,4 +20,6 @@ val useCaseModule = module {
     single { AddGlobalIngredientUseCase(get()) }
     single { UpdateGlobalIngredientUseCase(get()) }
     single { GetIngredientsUseCase(get()) }
+    single { GenerateRecipeStepsUseCase(get()) }
+    single { SaveRecipeStepsUseCase(get()) }
 }

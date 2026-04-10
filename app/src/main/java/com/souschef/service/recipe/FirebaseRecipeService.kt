@@ -92,5 +92,34 @@ class FirebaseRecipeService(
         val steps = getSteps(recipeId)
         return recipe to steps
     }
+
+    /**
+     * Deletes all steps in a recipe's steps sub-collection.
+     * Used before re-generating steps via AI to avoid duplicates.
+     */
+    suspend fun deleteAllSteps(recipeId: String) {
+        val stepsCollection = recipesCollection.document(recipeId).collection("steps")
+        val existingSteps = stepsCollection.get().await()
+        val batch = firestore.batch()
+        existingSteps.documents.forEach { doc ->
+            batch.delete(doc.reference)
+        }
+        batch.commit().await()
+    }
+
+    /**
+     * Writes multiple steps to a recipe's sub-collection in a single batch.
+     * Each step gets an auto-generated document ID and its stepNumber is preserved.
+     */
+    suspend fun batchAddSteps(recipeId: String, steps: List<RecipeStep>) {
+        val stepsCollection = recipesCollection.document(recipeId).collection("steps")
+        val batch = firestore.batch()
+        steps.forEach { step ->
+            val docRef = stepsCollection.document()
+            val stepWithId = step.copy(stepId = docRef.id)
+            batch.set(docRef, stepWithId)
+        }
+        batch.commit().await()
+    }
 }
 

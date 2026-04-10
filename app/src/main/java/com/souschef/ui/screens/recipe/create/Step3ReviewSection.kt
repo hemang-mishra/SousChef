@@ -125,15 +125,17 @@ internal fun Step3Review(
         Spacer(Modifier.height(8.dp))
 
         // Save buttons
-        PremiumOutlinedButton(
-            text = "Save for Later",
-            onClick = { onSave(false) },
+        PremiumButton(
+            text = "✨ Save & Generate Steps (AI)",
+            onClick = { onSave(true) },
             isLoading = uiState.isLoading
         )
 
-        PremiumButton(
-            text = "Publish Recipe",
-            onClick = { onSave(true) },
+        Spacer(Modifier.height(12.dp))
+
+        PremiumOutlinedButton(
+            text = "Save without Steps",
+            onClick = { onSave(false) },
             isLoading = uiState.isLoading
         )
 

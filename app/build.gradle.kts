@@ -37,6 +37,11 @@ android {
             "GOOGLE_WEB_CLIENT_ID",
             "\"${propOrEnv("GOOGLE_WEB_CLIENT_ID")}\""
         )
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${propOrEnv("GEMINI_API_KEY")}\""
+        )
     }
 
     buildTypes {
@@ -113,6 +118,9 @@ dependencies {
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
+
+    // Google Generative AI (Gemini)
+    implementation(libs.google.generativeai)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
