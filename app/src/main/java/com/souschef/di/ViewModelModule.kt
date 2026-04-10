@@ -25,15 +25,15 @@ import org.koin.dsl.module
  */
 val viewModelModule = module {
     // App-level — single (survives navigation)
-    single { AppViewModel(get()) }
+    single { AppViewModel(get(), get()) }
 
     // Auth screens — factory (fresh per navigation)
     factory { LoginViewModel(get()) }
     factory { SignUpViewModel(get()) }
 
     // Home — factory, needs userId + userName
-    factory { (userId: String, userName: String) ->
-        HomeViewModel(get(), userId, userName)
+    factory { (userId: String, userName: String, preferredLang: String?) ->
+        HomeViewModel(get(), userId, userName, preferredLang)
     }
     factory { (userId: String, userName: String) ->
         SavedRecipesViewModel(get(), userId, userName)

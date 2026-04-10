@@ -3,6 +3,7 @@ package com.souschef.ui.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.model.auth.UserProfile
+import com.souschef.preferences.AppPreferences
 import com.souschef.repository.auth.AuthRepository
 import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
@@ -22,11 +23,16 @@ import kotlinx.coroutines.launch
  * - Exposes [isLoggedIn] and [isAdmin] for navigation routing.
  */
 class AppViewModel(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val _currentUser = MutableStateFlow<UserProfile?>(null)
     val currentUser: StateFlow<UserProfile?> = _currentUser
+
+    /** Preferred language code for recipe translation (e.g. "hi" for Hindi, "es" for Spanish). */
+    val preferredLanguageCode: StateFlow<String?> = appPreferences.preferredLanguageCode.getFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** True when a user is authenticated AND their profile has been loaded. */
     val isLoggedIn: StateFlow<Boolean> = _currentUser
@@ -92,6 +98,13 @@ class AppViewModel(
     fun signOut() {
         viewModelScope.launch(Dispatchers.IO) {
             authRepository.signOut().collect { /* result handled by auth state observer */ }
+        }
+    }
+
+    /** Sets the preferred language code for recipe translation. */
+    fun setPreferredLanguage(languageCode: String?) {
+        viewModelScope.launch {
+            appPreferences.preferredLanguageCode.set(languageCode)
         }
     }
 

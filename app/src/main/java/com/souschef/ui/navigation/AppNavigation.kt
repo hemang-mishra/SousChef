@@ -177,9 +177,10 @@ fun AppNavigation() {
                 // ── Home (Phase 7) ───────────────────────────
                 entry<Screens.NavHomeRoute> {
                     val currentUser by appViewModel.currentUser.collectAsState()
+                    val preferredLang by appViewModel.preferredLanguageCode.collectAsState()
                     val user = currentUser ?: UserProfile()
                     val homeViewModel: HomeViewModel = koinInject {
-                        parametersOf(user.uid, user.displayName)
+                        parametersOf(user.uid, user.displayName, preferredLang)
                     }
                     HomeScreen(
                         viewModel = homeViewModel,
@@ -219,8 +220,11 @@ fun AppNavigation() {
                 // ── Profile (Phase 7) ────────────────────────
                 entry<Screens.NavProfileRoute> {
                     val currentUser by appViewModel.currentUser.collectAsState()
+                    val preferredLang by appViewModel.preferredLanguageCode.collectAsState()
                     ProfileScreen(
                         userProfile = currentUser,
+                        preferredLanguageCode = preferredLang,
+                        onSetPreferredLanguage = { code -> appViewModel.setPreferredLanguage(code) },
                         onSignOut = { appViewModel.signOut() }
                     )
                 }
