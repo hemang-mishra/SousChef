@@ -18,6 +18,17 @@ data class RecipeStep(
     val expectedVisualCue: String? = null,
     val mediaUrl: String? = null,
     val mediaType: String? = null, // "image" or "video"
-    val ingredientReferences: List<String> = emptyList()
+    /**
+     * List of **globalIngredientId** values used in this step.
+     * Populated by [GenerateRecipeStepsUseCase] via fuzzy-matching AI output names
+     * against the global ingredient library.
+     */
+    val ingredientReferences: List<String> = emptyList(),
+    /**
+     * Raw ingredient name strings from AI output that could NOT be matched to any
+     * global ingredient (similarity < 75%). Shown as amber warnings in the review UI
+     * so the user can manually resolve them.
+     */
+    val unresolvedIngredientNames: List<String> = emptyList()
 )
 

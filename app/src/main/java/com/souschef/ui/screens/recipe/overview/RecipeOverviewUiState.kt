@@ -20,6 +20,8 @@ data class RecipeOverviewUiState(
     val saltLevel: Float = 0f,
     val sweetnessLevel: Float = 0f,
     val isLoading: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    val currentUserId: String? = null,
+    val isDeleted: Boolean = false
 )
 

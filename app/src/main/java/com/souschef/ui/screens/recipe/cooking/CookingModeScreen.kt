@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -130,7 +131,10 @@ fun CookingModeScreen(
         onGoToStep = viewModel::goToStep,
         onStartTimer = viewModel::startTimer,
         onPauseTimer = viewModel::pauseTimer,
-        onResetTimer = viewModel::resetTimer
+        onResetTimer = viewModel::resetTimer,
+        onDispense = { globalIngredientId, name, quantity, unit ->
+            viewModel.dispenseIngredient(globalIngredientId, name, quantity, unit)
+        }
     )
 }
 
@@ -149,7 +153,8 @@ fun CookingModeScreenLayout(
     onGoToStep: (Int) -> Unit,
     onStartTimer: () -> Unit,
     onPauseTimer: () -> Unit,
-    onResetTimer: () -> Unit
+    onResetTimer: () -> Unit,
+    onDispense: (String, String, Double, String) -> Unit
 ) {
     if (uiState.isLoading) {
         FullScreenLoader(message = "Preparing your cooking session…")
@@ -262,9 +267,11 @@ fun CookingModeScreenLayout(
                     timerMillisRemaining = uiState.timerMillisRemaining,
                     isTimerRunning = uiState.isTimerRunning,
                     timerFinished = uiState.timerFinished,
+                    dispensingIds = uiState.dispensingIngredientIds,
                     onStartTimer = onStartTimer,
                     onPauseTimer = onPauseTimer,
-                    onResetTimer = onResetTimer
+                    onResetTimer = onResetTimer,
+                    onDispense = onDispense
                 )
             }
         }
@@ -338,9 +345,11 @@ private fun StepContent(
     timerMillisRemaining: Long,
     isTimerRunning: Boolean,
     timerFinished: Boolean,
+    dispensingIds: Set<String>,
     onStartTimer: () -> Unit,
     onPauseTimer: () -> Unit,
-    onResetTimer: () -> Unit
+    onResetTimer: () -> Unit,
+    onDispense: (String, String, Double, String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -385,7 +394,11 @@ private fun StepContent(
             adjustedIngredients.find { it.globalIngredientId == refId }
         }
         if (referencedIngredients.isNotEmpty()) {
-            IngredientsForStep(ingredients = referencedIngredients)
+            IngredientsForStep(
+                ingredients = referencedIngredients,
+                dispensingIds = dispensingIds,
+                onDispense = onDispense
+            )
         }
 
         // Timer section
@@ -594,18 +607,30 @@ private fun VideoPlayerSection(videoUrl: String) {
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun IngredientsForStep(ingredients: List<ResolvedIngredient>) {
+private fun IngredientsForStep(
+    ingredients: List<ResolvedIngredient>,
+    dispensingIds: Set<String>,
+    onDispense: (String, String, Double, String) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         PremiumSectionHeader(title = "You'll need:")
 
         ingredients.forEach { ingredient ->
-            IngredientRow(ingredient = ingredient)
+            IngredientRow(
+                ingredient = ingredient,
+                isDispensing = dispensingIds.contains(ingredient.globalIngredientId),
+                onDispense = { onDispense(ingredient.globalIngredientId, ingredient.name, ingredient.quantity, ingredient.unit) }
+            )
         }
     }
 }
 
 @Composable
-private fun IngredientRow(ingredient: ResolvedIngredient) {
+private fun IngredientRow(
+    ingredient: ResolvedIngredient,
+    isDispensing: Boolean,
+    onDispense: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -639,12 +664,45 @@ private fun IngredientRow(ingredient: ResolvedIngredient) {
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "${ingredient.quantity.toOneDecimalString()} ${ingredient.unit}",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = AppColors.gold()
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "${ingredient.quantity.toOneDecimalString()} ${ingredient.unit}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = AppColors.gold()
+            )
+        }
+
+        if (ingredient.isDispensable) {
+            Spacer(modifier = Modifier.width(12.dp))
+            androidx.compose.material3.Button(
+                onClick = onDispense,
+                enabled = !isDispensing,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = AppColors.gold().copy(alpha = 0.15f),
+                    contentColor = AppColors.gold()
+                ),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(36.dp)
+            ) {
+                if (isDispensing) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = AppColors.gold(),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Outlined.Science,
+                        contentDescription = "Dispense",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Auto", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
     }
 }
 
@@ -933,7 +991,8 @@ private fun CookingModePreview() {
             onGoToStep = {},
             onStartTimer = {},
             onPauseTimer = {},
-            onResetTimer = {}
+            onResetTimer = {},
+            onDispense = { _, _, _, _ -> }
         )
     }
 }
@@ -966,7 +1025,8 @@ private fun CookingModeLastStepPreview() {
             onGoToStep = {},
             onStartTimer = {},
             onPauseTimer = {},
-            onResetTimer = {}
+            onResetTimer = {},
+            onDispense = { _, _, _, _ -> }
         )
     }
 }
@@ -996,7 +1056,8 @@ private fun CookingModeLoadingPreview() {
             onGoToStep = {},
             onStartTimer = {},
             onPauseTimer = {},
-            onResetTimer = {}
+            onResetTimer = {},
+            onDispense = { _, _, _, _ -> }
         )
     }
 }

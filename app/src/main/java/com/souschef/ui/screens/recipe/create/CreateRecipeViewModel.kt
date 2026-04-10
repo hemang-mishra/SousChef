@@ -11,6 +11,8 @@ import com.souschef.service.storage.FirebaseStorageService
 import com.souschef.usecases.ingredient.GetIngredientsUseCase
 import com.souschef.usecases.recipe.CreateRecipeUseCase
 import com.souschef.usecases.recipe.PublishRecipeUseCase
+import com.souschef.usecases.recipe.UpdateRecipeUseCase
+import com.souschef.repository.recipe.RecipeRepository
 import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,10 +27,13 @@ import kotlinx.coroutines.launch
  */
 class CreateRecipeViewModel(
     private val createRecipeUseCase: CreateRecipeUseCase,
+    private val updateRecipeUseCase: UpdateRecipeUseCase,
     private val publishRecipeUseCase: PublishRecipeUseCase,
     private val getIngredientsUseCase: GetIngredientsUseCase,
+    private val recipeRepository: RecipeRepository,
     private val storageService: FirebaseStorageService,
-    private val currentUser: UserProfile
+    private val currentUser: UserProfile,
+    private val recipeId: String? = null
 ) : ViewModel() {
 
     // ── Internal state flows ─────────────────────────────────
@@ -51,6 +56,8 @@ class CreateRecipeViewModel(
     private val _isSaved = MutableStateFlow(false)
     private val _savedRecipeId = MutableStateFlow<String?>(null)
     private val _generalError = MutableStateFlow<String?>(null)
+    
+    private val _remoteCoverImageUrl = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<CreateRecipeUiState> = combine(
         combine(_currentStep, _title, _description, _baseServingSize) { step, title, desc, base ->
@@ -95,6 +102,44 @@ class CreateRecipeViewModel(
 
     init {
         loadGlobalIngredients()
+        if (recipeId != null) {
+            loadRecipeToEdit(recipeId)
+        }
+    }
+
+    private fun loadRecipeToEdit(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            recipeRepository.getRecipe(id).collect { result ->
+                when(result) {
+                    is Resource.Success -> {
+                        val recipe = result.data
+                        _title.value = recipe.title
+                        _description.value = recipe.description
+                        _baseServingSize.value = recipe.baseServingSize
+                        if (recipe.minServingSize != null) {
+                            _minServingSize.value = recipe.minServingSize
+                            _useMinServing.value = true
+                        }
+                        if (recipe.maxServingSize != null) {
+                            _maxServingSize.value = recipe.maxServingSize
+                            _useMaxServing.value = true
+                        }
+                        _selectedTags.value = recipe.tags.mapNotNull { tagName ->
+                            RecipeTag.entries.find { it.name == tagName }
+                        }
+                        _ingredients.value = recipe.ingredients
+                        _remoteCoverImageUrl.value = recipe.coverImageUrl
+                        _isLoading.value = false
+                    }
+                    is Resource.Failure -> {
+                        _generalError.value = "Failed to load recipe for editing"
+                        _isLoading.value = false
+                    }
+                    is Resource.Loading -> { }
+                }
+            }
+        }
     }
 
     private fun loadGlobalIngredients() {
@@ -168,6 +213,7 @@ class CreateRecipeViewModel(
 
     fun onRemoveCoverImage() {
         _coverImageUri.value = null
+        _remoteCoverImageUrl.value = null
     }
 
     // ── Step 2: Ingredients ──────────────────────────────────
@@ -194,15 +240,14 @@ class CreateRecipeViewModel(
             _generalError.value = null
 
             // Upload cover image if selected
-            var coverImageUrl: String? = null
+            var coverImageUrl: String? = _remoteCoverImageUrl.value
             val imageUri = _coverImageUri.value
             if (imageUri != null) {
                 _isUploadingImage.value = true
                 try {
-                    // We need a temporary ID for the storage path;
-                    // upload with a temp path, then update after recipe creation
+                    val uploadId = recipeId ?: "temp_${System.currentTimeMillis()}"
                     coverImageUrl = storageService.uploadRecipeCoverImage(
-                        recipeId = "temp_${System.currentTimeMillis()}",
+                        recipeId = uploadId,
                         imageUri = imageUri
                     )
                 } catch (e: Exception) {
@@ -214,29 +259,57 @@ class CreateRecipeViewModel(
                 _isUploadingImage.value = false
             }
 
-            createRecipeUseCase.execute(
-                title = _title.value,
-                description = _description.value,
-                baseServingSize = _baseServingSize.value,
-                minServingSize = _minServingSize.value,
-                maxServingSize = _maxServingSize.value,
-                tags = _selectedTags.value.map { it.name },
-                ingredients = _ingredients.value,
-                currentUser = currentUser,
-                publish = publish,
-                coverImageUrl = coverImageUrl
-            ).collect { result ->
-                when (result) {
-                    is Resource.Success -> {
-                        _savedRecipeId.value = result.data
-                        _isSaved.value = true
-                        _isLoading.value = false
+            if (recipeId != null) {
+                updateRecipeUseCase.execute(
+                    recipeId = recipeId,
+                    title = _title.value,
+                    description = _description.value,
+                    baseServingSize = _baseServingSize.value,
+                    minServingSize = _minServingSize.value,
+                    maxServingSize = _maxServingSize.value,
+                    tags = _selectedTags.value.map { it.name },
+                    ingredients = _ingredients.value,
+                    publish = publish,
+                    coverImageUrl = coverImageUrl
+                ).collect { result ->
+                    when (result) {
+                        is Resource.Success -> {
+                            _savedRecipeId.value = recipeId
+                            _isSaved.value = true
+                            _isLoading.value = false
+                        }
+                        is Resource.Failure -> {
+                            _isLoading.value = false
+                            _generalError.value = result.message ?: "Failed to update recipe."
+                        }
+                        is Resource.Loading -> { /* keep spinner */ }
                     }
-                    is Resource.Failure -> {
-                        _isLoading.value = false
-                        _generalError.value = result.message ?: "Failed to save recipe."
+                }
+            } else {
+                createRecipeUseCase.execute(
+                    title = _title.value,
+                    description = _description.value,
+                    baseServingSize = _baseServingSize.value,
+                    minServingSize = _minServingSize.value,
+                    maxServingSize = _maxServingSize.value,
+                    tags = _selectedTags.value.map { it.name },
+                    ingredients = _ingredients.value,
+                    currentUser = currentUser,
+                    publish = publish,
+                    coverImageUrl = coverImageUrl
+                ).collect { result ->
+                    when (result) {
+                        is Resource.Success -> {
+                            _savedRecipeId.value = result.data
+                            _isSaved.value = true
+                            _isLoading.value = false
+                        }
+                        is Resource.Failure -> {
+                            _isLoading.value = false
+                            _generalError.value = result.message ?: "Failed to save recipe."
+                        }
+                        is Resource.Loading -> { /* keep spinner */ }
                     }
-                    is Resource.Loading -> { /* keep spinner */ }
                 }
             }
         }

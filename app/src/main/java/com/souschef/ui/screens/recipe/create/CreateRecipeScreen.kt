@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -67,6 +68,7 @@ val UNIT_OPTIONS_RECIPE = listOf("grams", "ml", "tsp", "tbsp", "cups", "pieces",
 
 @Composable
 fun CreateRecipeScreen(
+    isEditMode: Boolean = false,
     onBack: () -> Unit,
     onRecipeSaved: (String) -> Unit,
     viewModel: CreateRecipeViewModel = koinInject()
@@ -88,6 +90,7 @@ fun CreateRecipeScreen(
     }
 
     CreateRecipeScreenLayout(
+        isEditMode = isEditMode,
         uiState = uiState,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
@@ -116,6 +119,7 @@ fun CreateRecipeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateRecipeScreenLayout(
+    isEditMode: Boolean = false,
     uiState: CreateRecipeUiState,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
@@ -139,9 +143,10 @@ fun CreateRecipeScreenLayout(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(top = 0.dp),
                 title = {
                     Text(
-                        "Create Recipe",
+                        if (isEditMode) "Edit Recipe" else "Create Recipe",
                         style = MaterialTheme.typography.headlineSmall,
                         color = AppColors.textPrimary()
                     )

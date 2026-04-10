@@ -2,6 +2,8 @@ package com.souschef.di
 
 import com.souschef.ui.screens.auth.login.LoginViewModel
 import com.souschef.ui.screens.auth.signup.SignUpViewModel
+import com.souschef.ui.screens.device.dispenser.DispenserViewModel
+import com.souschef.ui.screens.device.settings.DispenserSettingsViewModel
 import com.souschef.ui.screens.home.HomeViewModel
 import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientViewModel
 import com.souschef.ui.screens.ingredient.library.IngredientLibraryViewModel
@@ -33,19 +35,19 @@ val viewModelModule = module {
         HomeViewModel(get(), userId, userName)
     }
 
-    // Recipe creation — factory, needs currentUser from AppViewModel
-    factory { (currentUser: com.souschef.model.auth.UserProfile) ->
-        CreateRecipeViewModel(get(), get(), get(), get(), currentUser)
+    // Recipe creation — factory, needs currentUser from AppViewModel and optional recipeId
+    factory { (currentUser: com.souschef.model.auth.UserProfile, recipeId: String?) ->
+        CreateRecipeViewModel(get(), get(), get(), get(), get(), get(), currentUser, recipeId)
     }
 
-    // Recipe overview — factory, needs recipeId
-    factory { (recipeId: String) ->
-        RecipeOverviewViewModel(get(), get(), get(), recipeId)
+    // Recipe overview — factory, needs recipeId and currentUser
+    factory { (recipeId: String, currentUser: com.souschef.model.auth.UserProfile) ->
+        RecipeOverviewViewModel(get(), get(), get(), get(), recipeId, currentUser.uid)
     }
 
-    // Cooking mode — factory, needs recipeId + serving/flavour params
+    // Cooking mode — factory, needs recipeId + serving/flavour params + Phase 5 dispense deps
     factory { (recipeId: String, servings: Int, spice: Float, salt: Float, sweetness: Float) ->
-        CookingModeViewModel(get(), get(), get(), recipeId, servings, spice, salt, sweetness)
+        CookingModeViewModel(get(), get(), get(), get(), get(), recipeId, servings, spice, salt, sweetness)
     }
 
     // AI Step Generation — factory, needs recipeId
@@ -60,5 +62,12 @@ val viewModelModule = module {
     factory { (currentUser: com.souschef.model.auth.UserProfile, ingredientId: String?) ->
         AddEditIngredientViewModel(get(), get(), get(), currentUser, ingredientId)
     }
-}
 
+    // ── Phase 5: Device ───────────────────────────────────────────────────────
+
+    // Dispenser screen — factory (BleDeviceManager injected as single)
+    factory { DispenserViewModel(get(), get(), get(), get(), get()) }
+
+    // Dispenser settings — factory
+    factory { DispenserSettingsViewModel(get(), get()) }
+}

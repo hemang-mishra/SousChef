@@ -108,4 +108,28 @@ class FirebaseStorageService(
 
         return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
+
+    /**
+     * Recursively deletes all media associated with a recipe.
+     * Uses listAll to clear the "steps/" directory and then the main cover image.
+     */
+    suspend fun deleteAllRecipeMedia(recipeId: String) {
+        try {
+            // Delete steps directory items
+            val stepsDirRef = storageRef.child("recipes/$recipeId/steps")
+            val stepsList = stepsDirRef.listAll().await()
+            stepsList.items.forEach { fileRef ->
+                fileRef.delete().await()
+            }
+
+            // Delete root directory items (like cover image)
+            val rootDirRef = storageRef.child("recipes/$recipeId")
+            val rootList = rootDirRef.listAll().await()
+            rootList.items.forEach { fileRef ->
+                fileRef.delete().await()
+            }
+        } catch (e: Exception) {
+            // In case directories don't exist, we don't want to crash.
+        }
+    }
 }

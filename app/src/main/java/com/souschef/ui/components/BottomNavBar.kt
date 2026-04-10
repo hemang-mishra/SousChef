@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -126,20 +127,20 @@ fun SousChefBottomNavBar(
             colors = navItemColors()
         )
 
-        // Ingredients
-        val ingredientsSelected = currentRoute is Screens.NavIngredientLibraryRoute
+        // Dispenser
+        val dispenserSelected = currentRoute is Screens.NavDispenserRoute
         NavigationBarItem(
-            selected = ingredientsSelected,
-            onClick = { onNavigate(Screens.NavIngredientLibraryRoute) },
+            selected = dispenserSelected,
+            onClick = { onNavigate(Screens.NavDispenserRoute) },
             icon = {
                 Icon(
-                    Icons.AutoMirrored.Filled.MenuBook,
-                    contentDescription = "Ingredients",
-                    tint = if (ingredientsSelected) AppColors.gold()
+                    Icons.Outlined.Science,
+                    contentDescription = "Dispenser",
+                    tint = if (dispenserSelected) AppColors.gold()
                     else AppColors.textTertiary()
                 )
             },
-            label = { Text("Pantry", style = MaterialTheme.typography.labelSmall) },
+            label = { Text("Dispenser", style = MaterialTheme.typography.labelSmall) },
             colors = navItemColors()
         )
 

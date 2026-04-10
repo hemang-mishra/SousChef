@@ -83,5 +83,11 @@ class FirestoreRecipeRepository(
         val result = safeFirestoreCall { service.batchAddSteps(recipeId, steps) }
         emit(result)
     }
+
+    override fun deleteRecipe(recipeId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        val result = safeFirestoreCall { service.deleteRecipe(recipeId) }
+        emit(result)
+    }
 }
 

@@ -19,5 +19,6 @@ interface RecipeRepository {
     fun getSteps(recipeId: String): Flow<Resource<List<RecipeStep>>>
     fun deleteAllSteps(recipeId: String): Flow<Resource<Unit>>
     fun batchAddSteps(recipeId: String, steps: List<RecipeStep>): Flow<Resource<Unit>>
+    fun deleteRecipe(recipeId: String): Flow<Resource<Unit>>
 }
 

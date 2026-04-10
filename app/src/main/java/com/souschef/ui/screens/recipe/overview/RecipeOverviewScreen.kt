@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,10 +33,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,9 +76,16 @@ import kotlin.math.roundToInt
 fun RecipeOverviewScreen(
 	onBack: () -> Unit,
 	onStartCooking: (selectedServings: Int, spiceLevel: Float, saltLevel: Float, sweetnessLevel: Float) -> Unit,
+	onEditRecipe: (String) -> Unit,
 	viewModel: RecipeOverviewViewModel = koinInject()
 ) {
 	val uiState by viewModel.uiState.collectAsState()
+
+	LaunchedEffect(uiState.isDeleted) {
+		if (uiState.isDeleted) {
+			onBack()
+		}
+	}
 
 	RecipeOverviewContent(
 		uiState = uiState,
@@ -82,7 +101,9 @@ fun RecipeOverviewScreen(
 				uiState.saltLevel,
 				uiState.sweetnessLevel
 			)
-		}
+		},
+		onEditRecipe = { uiState.recipe?.let { onEditRecipe(it.recipeId) } },
+		onDeleteRecipe = viewModel::onDeleteRecipe
 	)
 }
 
@@ -95,7 +116,9 @@ fun RecipeOverviewContent(
 	onSpiceLevelChanged: (Float) -> Unit,
 	onSaltLevelChanged: (Float) -> Unit,
 	onSweetnessLevelChanged: (Float) -> Unit,
-	onStartCooking: () -> Unit
+	onStartCooking: () -> Unit,
+	onEditRecipe: () -> Unit,
+	onDeleteRecipe: () -> Unit
 ) {
 	val recipe = uiState.recipe
 
@@ -123,13 +146,68 @@ fun RecipeOverviewContent(
 	val minServings = recipe.minServingSize ?: 1
 	val maxServings = recipe.maxServingSize ?: (recipe.baseServingSize * 4).coerceAtLeast(minServings)
 
+	var showMenu by remember { mutableStateOf(false) }
+	var showDeleteDialog by remember { mutableStateOf(false) }
+	val showOptions = uiState.currentUserId != null && uiState.currentUserId == recipe.creatorId
+
+	if (showDeleteDialog) {
+		AlertDialog(
+			onDismissRequest = { showDeleteDialog = false },
+			title = { Text("Delete Recipe") },
+			text = { Text("Are you sure you want to delete this recipe? This action cannot be undone.") },
+			confirmButton = {
+				Button(
+					onClick = {
+						showDeleteDialog = false
+						onDeleteRecipe()
+					},
+					colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+				) {
+					Text("Delete")
+				}
+			},
+			dismissButton = {
+				TextButton(onClick = { showDeleteDialog = false }) {
+					Text("Cancel")
+				}
+			}
+		)
+	}
+
 	Scaffold(
 		topBar = {
 			TopAppBar(
+				windowInsets = WindowInsets(top = 0.dp),
 				title = { Text(text = "Recipe Overview") },
 				navigationIcon = {
 					IconButton(onClick = onBack) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+					}
+				},
+				actions = {
+					if (showOptions) {
+						IconButton(onClick = { showMenu = true }) {
+							Icon(Icons.Default.MoreVert, contentDescription = "Options")
+						}
+						DropdownMenu(
+							expanded = showMenu,
+							onDismissRequest = { showMenu = false }
+						) {
+							DropdownMenuItem(
+								text = { Text("Edit Recipe") },
+								onClick = {
+									showMenu = false
+									onEditRecipe()
+								}
+							)
+							DropdownMenuItem(
+								text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+								onClick = {
+									showMenu = false
+									showDeleteDialog = true
+								}
+							)
+						}
 					}
 				},
 				colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -477,32 +555,49 @@ private fun Float.toFlavorLevel(): Float {
 private fun RecipeOverviewContentPreview() {
 	SousChefTheme {
 		RecipeOverviewContent(
-			uiState = RecipeOverviewUiState(
-				recipe = Recipe(
-					recipeId = "r1",
-					title = "Creamy Garlic Pasta",
-					creatorName = "Chef Hemang",
-					baseServingSize = 2,
-					minServingSize = 1,
-					maxServingSize = 6,
-					isVerifiedChefRecipe = true,
-					ingredients = emptyList()
-				),
-				selectedServings = 3,
-				adjustedIngredients = listOf(
-					ResolvedIngredient(globalIngredientId = "1", name = "Garlic", quantity = 4.2, unit = "cloves"),
-					ResolvedIngredient(globalIngredientId = "2", name = "Cream", quantity = 220.0, unit = "ml"),
-					ResolvedIngredient(globalIngredientId = "3", name = "Parmesan", quantity = 35.0, unit = "g")
-				),
-				isLoading = false
-			),
-			onBack = {},
-			onServingsChanged = {},
-			onSpiceLevelChanged = {},
-			onSaltLevelChanged = {},
-			onSweetnessLevelChanged = {},
-			onStartCooking = {}
-		)
+            uiState = RecipeOverviewUiState(
+                recipe = Recipe(
+                    recipeId = "r1",
+                    title = "Creamy Garlic Pasta",
+                    creatorName = "Chef Hemang",
+                    baseServingSize = 2,
+                    minServingSize = 1,
+                    maxServingSize = 6,
+                    isVerifiedChefRecipe = true,
+                    ingredients = emptyList()
+                ),
+                selectedServings = 3,
+                adjustedIngredients = listOf(
+                    ResolvedIngredient(
+                        globalIngredientId = "1",
+                        name = "Garlic",
+                        quantity = 4.2,
+                        unit = "cloves"
+                    ),
+                    ResolvedIngredient(
+                        globalIngredientId = "2",
+                        name = "Cream",
+                        quantity = 220.0,
+                        unit = "ml"
+                    ),
+                    ResolvedIngredient(
+                        globalIngredientId = "3",
+                        name = "Parmesan",
+                        quantity = 35.0,
+                        unit = "g"
+                    )
+                ),
+                isLoading = false
+            ),
+            onBack = {},
+            onServingsChanged = {},
+            onSpiceLevelChanged = {},
+            onSaltLevelChanged = {},
+            onStartCooking = {},
+            onEditRecipe = {},
+            onDeleteRecipe = {},
+            onSweetnessLevelChanged = {}
+        )
 	}
 }
 

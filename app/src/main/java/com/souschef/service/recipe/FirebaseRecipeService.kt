@@ -121,5 +121,15 @@ class FirebaseRecipeService(
         }
         batch.commit().await()
     }
-}
 
+    /**
+     * Deletes a recipe document and completely drops its steps sub-collection.
+     */
+    suspend fun deleteRecipe(recipeId: String) {
+        // 1. Delete all steps inside the sub-collection
+        deleteAllSteps(recipeId)
+
+        // 2. Delete the recipe document itself
+        recipesCollection.document(recipeId).delete().await()
+    }
+}

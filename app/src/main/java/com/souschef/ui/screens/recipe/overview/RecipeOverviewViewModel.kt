@@ -21,11 +21,15 @@ import kotlinx.coroutines.launch
  * by joining with [GlobalIngredient] from [IngredientRepository], then delegates
  * quantity calculations to [RecipeCalculationUseCase].
  */
+import com.souschef.usecases.recipe.DeleteRecipeUseCase
+
 class RecipeOverviewViewModel(
     private val recipeRepository: RecipeRepository,
     private val ingredientRepository: IngredientRepository,
     private val calculationUseCase: RecipeCalculationUseCase,
-    private val recipeId: String
+    private val deleteRecipeUseCase: DeleteRecipeUseCase,
+    private val recipeId: String,
+    private val currentUserId: String?
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RecipeOverviewUiState())
@@ -39,7 +43,7 @@ class RecipeOverviewViewModel(
 
     private fun loadRecipe() {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, error = null, currentUserId = currentUserId) }
 
             // 1. Fetch recipe
             recipeRepository.getRecipe(recipeId).collect { recipeResult ->
@@ -156,6 +160,24 @@ class RecipeOverviewViewModel(
             sweetnessLevel = state.sweetnessLevel
         )
         _uiState.update { it.copy(adjustedIngredients = adjusted) }
+    }
+    // ── Actions ─────────────────────────────────────────────
+
+    fun onDeleteRecipe() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            deleteRecipeUseCase.execute(recipeId).collect { result ->
+                when (result) {
+                    is Resource.Loading -> { }
+                    is Resource.Failure -> {
+                        _uiState.update { it.copy(isLoading = false, error = result.message ?: "Failed to delete recipe") }
+                    }
+                    is Resource.Success -> {
+                        _uiState.update { it.copy(isLoading = false, isDeleted = true) }
+                    }
+                }
+            }
+        }
     }
 }
 
