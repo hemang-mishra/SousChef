@@ -62,7 +62,6 @@ import com.souschef.ui.components.RatingDisplay
 import com.souschef.ui.components.SearchField
 import com.souschef.ui.components.SecondaryButton
 import com.souschef.ui.components.SectionHeader
-import com.souschef.ui.components.ShimmerCard
 import com.souschef.ui.components.SousChefExtendedFAB
 import com.souschef.ui.components.SousChefFAB
 import com.souschef.ui.components.SousChefFilterChip
@@ -427,11 +426,6 @@ fun DesignTestScreenLayout(
 
             // ── 10. LOADING STATES ────────────────────────────────────────
             DemoSection("10. Loading States") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ShimmerCard()
-                    ShimmerCard()
-                }
-                Spacer(Modifier.height(10.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

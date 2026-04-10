@@ -1,9 +1,10 @@
-package com.souschef.ui.screens.home
+package com.souschef.ui.screens.savedrecipes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.ui.components.RecipeWithMeta
 import com.souschef.repository.recipe.RecipeRepository
+import com.souschef.ui.screens.home.HomeUiState
 import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +17,8 @@ import kotlinx.coroutines.launch
  * ViewModel for the Home screen.
  * Loads the current user's recipes and supports search + tag filtering.
  */
-class HomeViewModel(
+
+class SavedRecipesViewModel(
     private val recipeRepository: RecipeRepository,
     private val userId: String,
     private val userName: String
@@ -34,16 +36,23 @@ class HomeViewModel(
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                // Fetch all recipes using the real-time listener
-                recipeRepository.getAllRecipes().collect { recipes ->
-                    // Filter down to only those with steps, since that's what the UI expects
-                    val recipesWithSteps = recipes.filter { it.hasSteps }
-                    
-                    val recipesWithMeta = recipesWithSteps.map { recipe ->
+                recipeRepository.getRecipesByCreator(userId).collect { recipes ->
+                    // For each recipe, load step count
+                    val recipesWithMeta = recipes.map { recipe ->
+                        var stepCount = 0
+                        try {
+                            recipeRepository.getSteps(recipe.recipeId).collect { result ->
+                                if (result is Resource.Success) {
+                                    stepCount = result.data.size
+                                }
+                            }
+                        } catch (_: Exception) {
+                            // Non-fatal — show 0 steps
+                        }
                         RecipeWithMeta(
                             recipe = recipe,
-                            stepCount = recipe.stepCount,
-                            hasSteps = recipe.hasSteps
+                            stepCount = stepCount,
+                            hasSteps = stepCount > 0
                         )
                     }
 
@@ -54,7 +63,6 @@ class HomeViewModel(
                             error = null
                         )
                     }
-                    applyFilters()
                 }
             } catch (e: Exception) {
                 _uiState.update {
@@ -62,36 +70,5 @@ class HomeViewModel(
                 }
             }
         }
-    }
-
-    fun onSearchQueryChange(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
-        applyFilters()
-    }
-
-    fun onTagSelected(tag: String?) {
-        _uiState.update { it.copy(selectedTag = tag) }
-        applyFilters()
-    }
-
-    private fun applyFilters() {
-        val state = _uiState.value
-        var filtered = state.recipes
-
-        // Search filter
-        if (state.searchQuery.isNotBlank()) {
-            filtered = filtered.filter {
-                it.recipe.title.contains(state.searchQuery, ignoreCase = true)
-            }
-        }
-
-        // Tag filter
-        if (state.selectedTag != null) {
-            filtered = filtered.filter { rwm ->
-                rwm.recipe.tags.contains(state.selectedTag)
-            }
-        }
-
-        _uiState.update { it.copy(filteredRecipes = filtered) }
     }
 }

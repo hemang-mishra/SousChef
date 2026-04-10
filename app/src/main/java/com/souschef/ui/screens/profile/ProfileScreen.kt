@@ -2,22 +2,19 @@ package com.souschef.ui.screens.profile
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +30,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.souschef.model.auth.UserProfile
-import com.souschef.ui.components.PremiumButton
 import com.souschef.ui.components.PremiumOutlinedButton
 import com.souschef.ui.components.VerifiedChefBadge
 import com.souschef.ui.theme.AppColors
@@ -42,7 +38,6 @@ import com.souschef.ui.theme.SousChefTheme
 
 /**
  * Minimal profile screen with user info and sign-out.
- * Full profile features (edit, settings) planned for Phase 9.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,10 +51,12 @@ fun ProfileScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         TopAppBar(
+            windowInsets = WindowInsets(top = 0.dp),
             title = {
                 Text(
                     text = "Profile",
                     style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                     color = AppColors.textPrimary()
                 )
             },
@@ -71,15 +68,21 @@ fun ProfileScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(40.dp))
 
-            // Avatar
+            // Premium Avatar with Ring Effect
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(GradientGold))
+                    .padding(4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(4.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(GradientGold)),
                 contentAlignment = Alignment.Center
@@ -93,15 +96,15 @@ fun ProfileScreen(
 
                 Text(
                     text = initials,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.ExtraBold,
                     color = AppColors.heroBackground()
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
 
-            // Name
+            // User Identity
             Text(
                 text = userProfile?.displayName ?: "User",
                 style = MaterialTheme.typography.headlineSmall,
@@ -109,50 +112,34 @@ fun ProfileScreen(
                 color = AppColors.textPrimary()
             )
 
-            // Email
             Text(
                 text = userProfile?.email ?: "",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = AppColors.textSecondary()
             )
 
             if (userProfile?.isVerifiedChef == true) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
                 VerifiedChefBadge()
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // Role badge
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(AppColors.gold().copy(alpha = 0.1f))
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = (userProfile?.role ?: "user").replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = AppColors.gold()
-                )
             }
 
             Spacer(Modifier.weight(1f))
 
-            // Sign Out button
+            // Sign Out action
             PremiumOutlinedButton(
                 text = "Sign Out",
                 onClick = onSignOut,
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .padding(bottom = 48.dp),
                 leadingIcon = {
                     Icon(
                         Icons.AutoMirrored.Outlined.Logout,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             )
-
-            Spacer(Modifier.height(32.dp))
         }
     }
 }

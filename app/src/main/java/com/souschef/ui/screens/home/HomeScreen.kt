@@ -42,13 +42,13 @@ import androidx.compose.ui.unit.dp
 import com.souschef.model.recipe.Recipe
 import com.souschef.model.recipe.RecipeTag
 import com.souschef.ui.components.EmptyStateView
-import com.souschef.ui.components.FullScreenLoader
 import com.souschef.ui.components.RecipeCard
 import com.souschef.ui.components.RecipeWithMeta
 import com.souschef.ui.components.SousChefFilterChip
 import com.souschef.ui.theme.AppColors
 import com.souschef.ui.theme.GradientGold
 import com.souschef.ui.theme.SousChefTheme
+import com.souschef.ui.components.RecipeListShimmer
 
 /**
  * Stateful composable — wires ViewModel.
@@ -84,8 +84,8 @@ fun HomeScreenLayout(
     onGenerateSteps: (String) -> Unit,
     onCreateRecipe: () -> Unit
 ) {
-    if (uiState.isLoading) {
-        FullScreenLoader(message = "Loading your recipes…")
+    if (uiState.isLoading && uiState.recipes.isEmpty()) {
+        RecipeListShimmer()
         return
     }
 
@@ -143,16 +143,18 @@ fun HomeScreenLayout(
             Spacer(Modifier.height(12.dp))
         }
 
-        // ── AI Feature Banner (show if user has recipes without steps) ─
-        val recipesWithoutSteps = uiState.filteredRecipes.count { !it.hasSteps }
-        if (recipesWithoutSteps > 0) {
-            item {
-                AiSuggestionBanner(count = recipesWithoutSteps)
-            }
-        }
 
         // ── Recipe Feed ──────────────────────────────────
-        if (uiState.filteredRecipes.isEmpty()) {
+        if (uiState.error != null) {
+            item {
+                EmptyStateView(
+                    title = "Error Loading Recipes",
+                    subtitle = uiState.error,
+                    icon = Icons.Outlined.Restaurant,
+                    modifier = Modifier.padding(top = 48.dp)
+                )
+            }
+        } else if (uiState.filteredRecipes.isEmpty()) {
             item {
                 if (uiState.recipes.isEmpty()) {
                     EmptyStateView(
@@ -266,36 +268,6 @@ private fun CategoryChipRow(
     }
 }
 
-// ── AI Suggestion Banner ─────────────────────────────────
-
-@Composable
-private fun AiSuggestionBanner(count: Int) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 12.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(AppColors.gold().copy(alpha = 0.08f))
-            .padding(14.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Default.AutoAwesome,
-                contentDescription = null,
-                tint = AppColors.gold(),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = "$count recipe${if (count > 1) "s" else ""} need${if (count == 1) "s" else ""} cooking steps — tap ✨ to generate with AI",
-                style = MaterialTheme.typography.bodySmall,
-                color = AppColors.gold(),
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
 
 // ── Previews ─────────────────────────────────────────────
 
@@ -315,7 +287,7 @@ private fun HomeScreenPreview() {
                             title = "Butter Chicken Masala",
                             creatorName = "Chef Hemang",
                             baseServingSize = 4,
-                            isVerifiedChefRecipe = true,
+                            isVerifiedChef = true,
                             tags = listOf("INDIAN", "SPICY")
                         ),
                         stepCount = 8,
@@ -351,7 +323,7 @@ private fun HomeScreenPreview() {
                             title = "Butter Chicken Masala",
                             creatorName = "Chef Hemang",
                             baseServingSize = 4,
-                            isVerifiedChefRecipe = true,
+                            isVerifiedChef = true,
                             tags = listOf("INDIAN", "SPICY")
                         ),
                         stepCount = 8,

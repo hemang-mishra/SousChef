@@ -11,6 +11,7 @@ import com.souschef.ui.screens.ingredient.library.IngredientLibraryViewModel
 import com.souschef.ui.screens.recipe.cooking.CookingModeViewModel
 import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
 import com.souschef.ui.screens.recipe.overview.RecipeOverviewViewModel
+import com.souschef.ui.screens.savedrecipes.SavedRecipesViewModel
 import com.souschef.ui.viewmodels.AppViewModel
 import org.koin.dsl.module
 
@@ -33,6 +34,9 @@ val viewModelModule = module {
     // Home — factory, needs userId + userName
     factory { (userId: String, userName: String) ->
         HomeViewModel(get(), userId, userName)
+    }
+    factory { (userId: String, userName: String) ->
+        SavedRecipesViewModel(get(), userId, userName)
     }
 
     // Recipe creation — factory, needs currentUser from AppViewModel and optional recipeId

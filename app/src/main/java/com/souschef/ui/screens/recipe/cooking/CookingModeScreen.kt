@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,7 +79,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.souschef.model.recipe.RecipeStep
 import com.souschef.model.recipe.ResolvedIngredient
-import com.souschef.ui.components.FullScreenLoader
+import com.souschef.ui.components.CookingModeShimmer
 import com.souschef.ui.components.GlassCard
 import com.souschef.ui.components.PremiumButton
 import com.souschef.ui.components.PremiumDivider
@@ -142,6 +143,7 @@ fun CookingModeScreen(
 // Stateless Layout
 // ─────────────────────────────────────────────────────────────
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CookingModeScreenLayout(
@@ -157,7 +159,7 @@ fun CookingModeScreenLayout(
     onDispense: (String, String, Double, String) -> Unit
 ) {
     if (uiState.isLoading) {
-        FullScreenLoader(message = "Preparing your cooking session…")
+        CookingModeShimmer()
         return
     }
 
@@ -185,6 +187,7 @@ fun CookingModeScreenLayout(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(top = 0.dp),
                 title = {
                     Text(
                         text = "Step ${uiState.currentStepIndex + 1} of ${uiState.steps.size}",

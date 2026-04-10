@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -43,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.ui.components.EmptyStateView
-import com.souschef.ui.components.FullScreenLoader
+import com.souschef.ui.components.IngredientListShimmer
 import com.souschef.ui.components.SousChefTextField
 import com.souschef.ui.theme.SousChefTheme
 import org.koin.compose.koinInject
@@ -71,7 +70,6 @@ fun IngredientLibraryLayout(
     Scaffold(
         topBar = {
             TopAppBar(
-                windowInsets = WindowInsets(top = 0.dp),
                 title = { Text("Ingredient Library", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -105,7 +103,7 @@ fun IngredientLibraryLayout(
 
             when {
                 uiState.isLoading -> {
-                    FullScreenLoader(message = "Loading ingredients")
+                    IngredientListShimmer()
                 }
                 uiState.error != null -> {
                     EmptyStateView(

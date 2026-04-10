@@ -715,7 +715,7 @@ recipes/{recipeId}
 ├── description: String
 ├── creatorId: String              // uid of the creator
 ├── creatorName: String
-├── isVerifiedChefRecipe: Boolean
+├── isVerifiedChef: Boolean
 ├── baseServingSize: Int           // e.g. 4
 ├── minServingSize: Int?           // optional creator restriction
 ├── maxServingSize: Int?

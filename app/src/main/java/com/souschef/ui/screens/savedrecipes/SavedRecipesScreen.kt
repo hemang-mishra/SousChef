@@ -3,16 +3,25 @@ package com.souschef.ui.screens.savedrecipes
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -20,18 +29,22 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.souschef.model.recipe.Recipe
 import com.souschef.ui.components.EmptyStateView
-import com.souschef.ui.components.FullScreenLoader
 import com.souschef.ui.components.RecipeCard
 import com.souschef.ui.components.RecipeWithMeta
 import com.souschef.ui.screens.home.HomeUiState
 import com.souschef.ui.screens.home.HomeViewModel
 import com.souschef.ui.theme.AppColors
 import com.souschef.ui.theme.SousChefTheme
+
+import com.souschef.ui.components.RecipeListShimmer
 
 /**
  * My Recipes screen — shows all recipes created by the current user.
@@ -41,7 +54,7 @@ import com.souschef.ui.theme.SousChefTheme
  */
 @Composable
 fun SavedRecipesScreen(
-    viewModel: HomeViewModel,
+    viewModel: SavedRecipesViewModel,
     onRecipeTap: (String) -> Unit,
     onGenerateSteps: (String) -> Unit,
     onCreateRecipe: () -> Unit
@@ -65,7 +78,7 @@ fun SavedRecipesLayout(
     onCreateRecipe: () -> Unit
 ) {
     if (uiState.isLoading) {
-        FullScreenLoader(message = "Loading your recipes…")
+        RecipeListShimmer()
         return
     }
 
@@ -77,6 +90,7 @@ fun SavedRecipesLayout(
     ) {
         item {
             TopAppBar(
+                windowInsets = WindowInsets(top = 0.dp),
                 title = {
                     Text(
                         text = "My Recipes",
@@ -111,6 +125,13 @@ fun SavedRecipesLayout(
                 )
             }
 
+            val recipesWithoutSteps = uiState.recipes.count { !it.hasSteps }
+            if (recipesWithoutSteps > 0) {
+                item {
+                    AiSuggestionBanner(count = recipesWithoutSteps)
+                }
+            }
+
             items(
                 items = uiState.recipes,
                 key = { it.recipe.recipeId }
@@ -126,6 +147,35 @@ fun SavedRecipesLayout(
             }
 
             item { Spacer(Modifier.height(20.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun AiSuggestionBanner(count: Int) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 12.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppColors.gold().copy(alpha = 0.08f))
+            .padding(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = AppColors.gold(),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "$count recipe${if (count > 1) "s" else ""} need${if (count == 1) "s" else ""} cooking steps — tap ✨ to generate with AI",
+                style = MaterialTheme.typography.bodySmall,
+                color = AppColors.gold(),
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
