@@ -1,6 +1,8 @@
 package com.souschef.ui.screens.device.dispenser
 
 import android.content.res.Configuration
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -73,7 +75,6 @@ import com.souschef.model.device.Compartment
 import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.ui.theme.AppColors
 import com.souschef.ui.theme.SousChefTheme
-
 // ── Stateful entry point ──────────────────────────────────────────────────────
 
 @Composable
@@ -91,9 +92,28 @@ fun DispenserScreen(
         uiState.successMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSuccess() }
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Permission launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results.all { it.value }) {
+            viewModel.onScanConnect()
+        } else {
+            viewModel.onError("Bluetooth permissions are required to connect to the dispenser.")
+        }
+    }
+
     DispenserScreenLayout(
         uiState             = uiState,
-        onScanConnect       = viewModel::onScanConnect,
+        onScanConnect       = {
+            if (com.souschef.permissions.BlePermissionHelper.hasAllPermissions(context)) {
+                viewModel.onScanConnect()
+            } else {
+                permissionLauncher.launch(com.souschef.permissions.BlePermissionHelper.requiredPermissions)
+            }
+        },
         onDisconnect        = viewModel::onDisconnect,
         onAssignIngredient  = viewModel::onAssignIngredient,
         onClearCompartment  = viewModel::onClearCompartment,
