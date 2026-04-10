@@ -41,7 +41,7 @@ val viewModelModule = module {
 
     // Recipe creation — factory, needs currentUser from AppViewModel and optional recipeId
     factory { (currentUser: com.souschef.model.auth.UserProfile, recipeId: String?) ->
-        CreateRecipeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), currentUser, recipeId)
+        CreateRecipeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), currentUser, recipeId)
     }
 
     // Recipe overview — factory, needs recipeId and currentUser
