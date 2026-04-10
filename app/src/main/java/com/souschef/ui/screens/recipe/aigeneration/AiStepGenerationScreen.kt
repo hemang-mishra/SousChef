@@ -1,6 +1,10 @@
 package com.souschef.ui.screens.recipe.aigeneration
 
+import android.net.Uri
 import android.content.res.Configuration
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -37,11 +41,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -72,11 +79,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.souschef.model.recipe.RecipeStep
 import com.souschef.ui.components.FullScreenLoader
 import com.souschef.ui.components.PremiumButton
@@ -134,6 +143,8 @@ fun AiStepGenerationScreen(
         onAddManualStep = viewModel::onAddManualStep,
         onSaveSteps = viewModel::onSaveSteps,
         onRetry = viewModel::onRetry,
+        onStepMediaSelected = viewModel::onStepMediaSelected,
+        onRemoveStepMedia = viewModel::onRemoveStepMedia,
         snackbarHostState = snackbarHostState
     )
 }
@@ -156,6 +167,8 @@ fun AiStepGenerationScreenLayout(
     onAddManualStep: () -> Unit,
     onSaveSteps: () -> Unit,
     onRetry: () -> Unit,
+    onStepMediaSelected: (Int, Uri, String) -> Unit = { _, _, _ -> },
+    onRemoveStepMedia: (Int) -> Unit = {},
     snackbarHostState: SnackbarHostState
 ) {
     Scaffold(
@@ -214,7 +227,9 @@ fun AiStepGenerationScreenLayout(
                     onMoveStepDown = onMoveStepDown,
                     onAddManualStep = onAddManualStep,
                     onSaveSteps = onSaveSteps,
-                    onRetry = onRetry
+                    onRetry = onRetry,
+                    onStepMediaSelected = onStepMediaSelected,
+                    onRemoveStepMedia = onRemoveStepMedia
                 )
             }
         }
@@ -438,7 +453,9 @@ private fun ReviewStage(
     onMoveStepDown: (Int) -> Unit,
     onAddManualStep: () -> Unit,
     onSaveSteps: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onStepMediaSelected: (Int, Uri, String) -> Unit,
+    onRemoveStepMedia: (Int) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Steps list
@@ -485,7 +502,9 @@ private fun ReviewStage(
                     onEditStep = { updatedStep -> onEditStep(index, updatedStep) },
                     onDeleteStep = { onDeleteStep(index) },
                     onMoveUp = { onMoveStepUp(index) },
-                    onMoveDown = { onMoveStepDown(index) }
+                    onMoveDown = { onMoveStepDown(index) },
+                    onMediaSelected = { uri, type -> onStepMediaSelected(index, uri, type) },
+                    onRemoveMedia = { onRemoveStepMedia(index) }
                 )
             }
 
@@ -527,7 +546,9 @@ private fun EditableStepCard(
     onEditStep: (RecipeStep) -> Unit,
     onDeleteStep: () -> Unit,
     onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    onMoveDown: () -> Unit,
+    onMediaSelected: (Uri, String) -> Unit,
+    onRemoveMedia: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -718,8 +739,157 @@ private fun EditableStepCard(
                         textStyle = MaterialTheme.typography.bodyMedium,
                         singleLine = true
                     )
+
+                    // ── Step Media ────────────────────────
+                    PremiumDivider()
+                    Text(
+                        text = "Step Media",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = AppColors.textSecondary(),
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    if (!step.mediaUrl.isNullOrBlank()) {
+                        // Show media preview
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            if (step.mediaType == "video") {
+                                // Video placeholder
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(AppColors.cardBackground()),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.Videocam,
+                                        contentDescription = "Video",
+                                        tint = AppColors.gold(),
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Text(
+                                        text = "Video attached",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = AppColors.textTertiary(),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(bottom = 8.dp)
+                                    )
+                                }
+                            } else {
+                                AsyncImage(
+                                    model = step.mediaUrl,
+                                    contentDescription = "Step image",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                            // Remove button
+                            IconButton(
+                                onClick = onRemoveMedia,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.8f))
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove media",
+                                    tint = MaterialTheme.colorScheme.onError,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        // Media picker buttons
+                        StepMediaPickerButtons(
+                            onMediaSelected = onMediaSelected
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+// ── Step Media Picker ────────────────────────────────────────
+
+@Composable
+private fun StepMediaPickerButtons(
+    onMediaSelected: (Uri, String) -> Unit
+) {
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { onMediaSelected(it, "image") }
+    }
+
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { onMediaSelected(it, "video") }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Image picker button
+        TextButton(
+            onClick = {
+                imagePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(AppColors.gold().copy(alpha = 0.08f))
+        ) {
+            Icon(
+                Icons.Default.Image,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = AppColors.gold()
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "Add Image",
+                style = MaterialTheme.typography.labelMedium,
+                color = AppColors.gold()
+            )
+        }
+
+        // Video picker button
+        TextButton(
+            onClick = {
+                videoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                )
+            },
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(AppColors.gold().copy(alpha = 0.08f))
+        ) {
+            Icon(
+                Icons.Default.Videocam,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = AppColors.gold()
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "Add Video",
+                style = MaterialTheme.typography.labelMedium,
+                color = AppColors.gold()
+            )
         }
     }
 }

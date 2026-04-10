@@ -27,7 +27,8 @@ class CreateRecipeUseCase(
         tags: List<String>,
         ingredients: List<RecipeIngredient>,
         currentUser: UserProfile,
-        publish: Boolean = false
+        publish: Boolean = false,
+        coverImageUrl: String? = null
     ): Flow<Resource<String>> = flow {
         emit(Resource.loading())
 
@@ -51,6 +52,7 @@ class CreateRecipeUseCase(
             baseServingSize = baseServingSize,
             minServingSize = minServingSize,
             maxServingSize = maxServingSize,
+            coverImageUrl = coverImageUrl,
             isPublished = publish,
             tags = tags,
             ingredients = processedIngredients,

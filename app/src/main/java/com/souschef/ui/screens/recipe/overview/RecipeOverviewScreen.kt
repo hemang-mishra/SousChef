@@ -203,12 +203,29 @@ private fun HeroSection(recipe: Recipe) {
 			.fillMaxWidth()
 			.height(250.dp)
 	) {
-		AsyncImage(
-			model = recipe.coverImageUrl,
-			contentDescription = recipe.title,
-			modifier = Modifier.fillMaxSize(),
-			contentScale = ContentScale.Crop
-		)
+		if (!recipe.coverImageUrl.isNullOrBlank()) {
+			AsyncImage(
+				model = recipe.coverImageUrl,
+				contentDescription = recipe.title,
+				modifier = Modifier.fillMaxSize(),
+				contentScale = ContentScale.Crop
+			)
+		} else {
+			// Gradient fallback when no cover image
+			Box(
+				modifier = Modifier
+					.fillMaxSize()
+					.background(
+						Brush.linearGradient(
+							colors = listOf(
+								AppColors.gold().copy(alpha = 0.6f),
+								AppColors.gold().copy(alpha = 0.2f),
+								MaterialTheme.colorScheme.surface
+							)
+						)
+					)
+			)
+		}
 
 		Box(
 			modifier = Modifier

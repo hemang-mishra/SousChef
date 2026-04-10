@@ -1,5 +1,6 @@
 package com.souschef.ui.screens.recipe.aigeneration
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.model.ingredient.GlobalIngredient
@@ -7,6 +8,7 @@ import com.souschef.model.recipe.RecipeStep
 import com.souschef.model.recipe.ResolvedIngredient
 import com.souschef.repository.ingredient.IngredientRepository
 import com.souschef.repository.recipe.RecipeRepository
+import com.souschef.service.storage.FirebaseStorageService
 import com.souschef.usecases.recipe.GenerateRecipeStepsUseCase
 import com.souschef.usecases.recipe.SaveRecipeStepsUseCase
 import com.souschef.util.Resource
@@ -29,6 +31,7 @@ class AiStepGenerationViewModel(
     private val saveRecipeStepsUseCase: SaveRecipeStepsUseCase,
     private val recipeRepository: RecipeRepository,
     private val ingredientRepository: IngredientRepository,
+    private val storageService: FirebaseStorageService,
     private val recipeId: String
 ) : ViewModel() {
 
@@ -260,5 +263,48 @@ class AiStepGenerationViewModel(
 
     fun clearError() {
         _error.value = null
+    }
+
+    // ── Step Media ───────────────────────────────────────────
+
+    /**
+     * Uploads media (image or video) for a specific step.
+     * Updates the step with the download URL and media type.
+     */
+    fun onStepMediaSelected(stepIndex: Int, uri: Uri, mediaType: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val downloadUrl = storageService.uploadStepMedia(
+                    recipeId = recipeId,
+                    stepIndex = stepIndex,
+                    mediaUri = uri,
+                    mediaType = mediaType
+                )
+                val current = _generatedSteps.value.toMutableList()
+                if (stepIndex in current.indices) {
+                    current[stepIndex] = current[stepIndex].copy(
+                        mediaUrl = downloadUrl,
+                        mediaType = mediaType
+                    )
+                    _generatedSteps.value = current
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to upload media: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Removes media from a step (clears URL and type).
+     */
+    fun onRemoveStepMedia(stepIndex: Int) {
+        val current = _generatedSteps.value.toMutableList()
+        if (stepIndex in current.indices) {
+            current[stepIndex] = current[stepIndex].copy(
+                mediaUrl = null,
+                mediaType = null
+            )
+            _generatedSteps.value = current
+        }
     }
 }

@@ -35,7 +35,7 @@ val viewModelModule = module {
 
     // Recipe creation — factory, needs currentUser from AppViewModel
     factory { (currentUser: com.souschef.model.auth.UserProfile) ->
-        CreateRecipeViewModel(get(), get(), get(), currentUser)
+        CreateRecipeViewModel(get(), get(), get(), get(), currentUser)
     }
 
     // Recipe overview — factory, needs recipeId
@@ -50,7 +50,7 @@ val viewModelModule = module {
 
     // AI Step Generation — factory, needs recipeId
     factory { (recipeId: String) ->
-        AiStepGenerationViewModel(get(), get(), get(), get(), recipeId)
+        AiStepGenerationViewModel(get(), get(), get(), get(), get(), recipeId)
     }
 
     // Ingredient Library — factory (fresh per navigation)

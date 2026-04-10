@@ -1,11 +1,13 @@
 package com.souschef.ui.screens.recipe.create
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.model.auth.UserProfile
 import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.model.recipe.RecipeIngredient
 import com.souschef.model.recipe.RecipeTag
+import com.souschef.service.storage.FirebaseStorageService
 import com.souschef.usecases.ingredient.GetIngredientsUseCase
 import com.souschef.usecases.recipe.CreateRecipeUseCase
 import com.souschef.usecases.recipe.PublishRecipeUseCase
@@ -25,6 +27,7 @@ class CreateRecipeViewModel(
     private val createRecipeUseCase: CreateRecipeUseCase,
     private val publishRecipeUseCase: PublishRecipeUseCase,
     private val getIngredientsUseCase: GetIngredientsUseCase,
+    private val storageService: FirebaseStorageService,
     private val currentUser: UserProfile
 ) : ViewModel() {
 
@@ -38,11 +41,13 @@ class CreateRecipeViewModel(
     private val _useMinServing = MutableStateFlow(false)
     private val _useMaxServing = MutableStateFlow(false)
     private val _selectedTags = MutableStateFlow<List<RecipeTag>>(emptyList())
+    private val _coverImageUri = MutableStateFlow<Uri?>(null)
     private val _ingredients = MutableStateFlow<List<RecipeIngredient>>(emptyList())
     private val _globalIngredients = MutableStateFlow<List<GlobalIngredient>>(emptyList())
     private val _titleError = MutableStateFlow<String?>(null)
     private val _ingredientError = MutableStateFlow<String?>(null)
     private val _isLoading = MutableStateFlow(false)
+    private val _isUploadingImage = MutableStateFlow(false)
     private val _isSaved = MutableStateFlow(false)
     private val _savedRecipeId = MutableStateFlow<String?>(null)
     private val _generalError = MutableStateFlow<String?>(null)
@@ -54,14 +59,17 @@ class CreateRecipeViewModel(
         combine(_minServingSize, _maxServingSize, _useMinServing, _useMaxServing) { min, max, useMin, useMax ->
             arrayOf<Any?>(min, max, useMin, useMax)
         },
-        combine(_selectedTags, _ingredients, _globalIngredients) { tags, ingredients, globalIngredients ->
-            Triple(tags, ingredients, globalIngredients)
+        combine(_selectedTags, _ingredients, _globalIngredients, _coverImageUri) { tags, ingredients, globalIngredients, coverUri ->
+            arrayOf<Any?>(tags, ingredients, globalIngredients, coverUri)
         },
         combine(_titleError, _ingredientError, _isLoading, _generalError) { tErr, iErr, loading, gErr ->
             arrayOf<Any?>(tErr, iErr, loading, gErr)
         },
-        combine(_isSaved, _savedRecipeId) { saved, id -> Pair(saved, id) }
-    ) { details, serving, (tags, ingredients, globalIngredients), errors, (saved, savedId) ->
+        combine(_isSaved, _savedRecipeId, _isUploadingImage) { saved, id, uploading ->
+            Triple(saved, id, uploading)
+        }
+    ) { details, serving, recipeData, errors, (saved, savedId, uploading) ->
+        @Suppress("UNCHECKED_CAST")
         CreateRecipeUiState(
             currentStep = details[0] as Int,
             title = details[1] as String,
@@ -71,12 +79,14 @@ class CreateRecipeViewModel(
             maxServingSize = serving[1] as Int?,
             useMinServing = serving[2] as Boolean,
             useMaxServing = serving[3] as Boolean,
-            selectedTags = tags,
-            ingredients = ingredients,
-            globalIngredients = globalIngredients,
+            selectedTags = recipeData[0] as List<RecipeTag>,
+            ingredients = recipeData[1] as List<RecipeIngredient>,
+            globalIngredients = recipeData[2] as List<GlobalIngredient>,
+            coverImageUri = recipeData[3] as Uri?,
             titleError = errors[0] as String?,
             ingredientError = errors[1] as String?,
             isLoading = errors[2] as Boolean,
+            isUploadingImage = uploading,
             generalError = errors[3] as String?,
             isSaved = saved,
             savedRecipeId = savedId
@@ -152,6 +162,14 @@ class CreateRecipeViewModel(
         _selectedTags.value = if (tag in current) current - tag else current + tag
     }
 
+    fun onCoverImageSelected(uri: Uri) {
+        _coverImageUri.value = uri
+    }
+
+    fun onRemoveCoverImage() {
+        _coverImageUri.value = null
+    }
+
     // ── Step 2: Ingredients ──────────────────────────────────
 
     fun onAddIngredient(ingredient: RecipeIngredient) {
@@ -175,6 +193,27 @@ class CreateRecipeViewModel(
             _isLoading.value = true
             _generalError.value = null
 
+            // Upload cover image if selected
+            var coverImageUrl: String? = null
+            val imageUri = _coverImageUri.value
+            if (imageUri != null) {
+                _isUploadingImage.value = true
+                try {
+                    // We need a temporary ID for the storage path;
+                    // upload with a temp path, then update after recipe creation
+                    coverImageUrl = storageService.uploadRecipeCoverImage(
+                        recipeId = "temp_${System.currentTimeMillis()}",
+                        imageUri = imageUri
+                    )
+                } catch (e: Exception) {
+                    _generalError.value = "Failed to upload image: ${e.message}"
+                    _isLoading.value = false
+                    _isUploadingImage.value = false
+                    return@launch
+                }
+                _isUploadingImage.value = false
+            }
+
             createRecipeUseCase.execute(
                 title = _title.value,
                 description = _description.value,
@@ -184,7 +223,8 @@ class CreateRecipeViewModel(
                 tags = _selectedTags.value.map { it.name },
                 ingredients = _ingredients.value,
                 currentUser = currentUser,
-                publish = publish
+                publish = publish,
+                coverImageUrl = coverImageUrl
             ).collect { result ->
                 when (result) {
                     is Resource.Success -> {

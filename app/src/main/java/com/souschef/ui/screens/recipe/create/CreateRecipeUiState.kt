@@ -1,5 +1,6 @@
 package com.souschef.ui.screens.recipe.create
 
+import android.net.Uri
 import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.model.recipe.RecipeIngredient
 import com.souschef.model.recipe.RecipeTag
@@ -21,6 +22,7 @@ data class CreateRecipeUiState(
     val useMinServing: Boolean = false,
     val useMaxServing: Boolean = false,
     val selectedTags: List<RecipeTag> = emptyList(),
+    val coverImageUri: Uri? = null,
 
     // Step 2: Ingredients (references to global library)
     val ingredients: List<RecipeIngredient> = emptyList(),
@@ -32,6 +34,7 @@ data class CreateRecipeUiState(
 
     // Loading / result
     val isLoading: Boolean = false,
+    val isUploadingImage: Boolean = false,
     val isSaved: Boolean = false,
     val savedRecipeId: String? = null,
     val generalError: String? = null

@@ -1,7 +1,12 @@
 package com.souschef.ui.screens.recipe.create
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +14,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,7 +23,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddAPhoto
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -27,16 +38,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.souschef.model.recipe.RecipeTag
 import com.souschef.ui.components.PremiumDivider
 import com.souschef.ui.components.PremiumSectionHeader
 import com.souschef.ui.components.SousChefFilterChip
 import com.souschef.ui.components.SousChefTextField
 import com.souschef.ui.theme.AppColors
+import com.souschef.ui.theme.GradientGold
 
 // ─────────────────────────────────────────────────────────────
 // Step 1: Recipe Details
@@ -53,8 +68,17 @@ internal fun Step1Details(
     onMinServingSizeChange: (Int) -> Unit,
     onUseMaxServingChange: (Boolean) -> Unit,
     onMaxServingSizeChange: (Int) -> Unit,
-    onToggleTag: (RecipeTag) -> Unit
+    onToggleTag: (RecipeTag) -> Unit,
+    onCoverImageSelected: (Uri) -> Unit,
+    onRemoveCoverImage: () -> Unit
 ) {
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { onCoverImageSelected(it) }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -63,6 +87,114 @@ internal fun Step1Details(
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Spacer(Modifier.height(4.dp))
+
+        // ── Cover Image Picker ───────────────────────────
+        PremiumSectionHeader(title = "Cover Photo")
+
+        if (uiState.coverImageUri != null) {
+            // Show selected image with remove button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable {
+                        imagePickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
+            ) {
+                AsyncImage(
+                    model = uiState.coverImageUri,
+                    contentDescription = "Cover photo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // Gradient overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.3f))
+                            )
+                        )
+                )
+                // Change label
+                Text(
+                    text = "Tap to change",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp)
+                )
+                // Remove button
+                IconButton(
+                    onClick = onRemoveCoverImage,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.5f))
+                ) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "Remove photo",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        } else {
+            // Empty state — tappable placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .border(
+                        width = 2.dp,
+                        brush = Brush.linearGradient(GradientGold),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .background(AppColors.gold().copy(alpha = 0.04f))
+                    .clickable {
+                        imagePickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.AddAPhoto,
+                        contentDescription = "Add cover photo",
+                        tint = AppColors.gold(),
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Text(
+                        text = "Add Cover Photo",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = AppColors.gold(),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Tap to choose from gallery",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppColors.textTertiary()
+                    )
+                }
+            }
+        }
+
+        PremiumDivider()
+
+        // ── Title & Description ──────────────────────────
 
         SousChefTextField(
             value = uiState.title,
@@ -268,4 +400,3 @@ private fun ServingStepper(
         }
     }
 }
-

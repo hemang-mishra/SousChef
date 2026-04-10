@@ -1,6 +1,7 @@
 package com.souschef.ui.screens.recipe.create
 
 import android.content.res.Configuration
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -100,6 +101,8 @@ fun CreateRecipeScreen(
         onUseMaxServingChange = viewModel::onUseMaxServingChange,
         onMaxServingSizeChange = viewModel::onMaxServingSizeChange,
         onToggleTag = viewModel::onToggleTag,
+        onCoverImageSelected = viewModel::onCoverImageSelected,
+        onRemoveCoverImage = viewModel::onRemoveCoverImage,
         onAddIngredient = viewModel::onAddIngredient,
         onRemoveIngredient = viewModel::onRemoveIngredient,
         onSave = viewModel::onSave
@@ -126,6 +129,8 @@ fun CreateRecipeScreenLayout(
     onUseMaxServingChange: (Boolean) -> Unit,
     onMaxServingSizeChange: (Int) -> Unit,
     onToggleTag: (RecipeTag) -> Unit,
+    onCoverImageSelected: (Uri) -> Unit,
+    onRemoveCoverImage: () -> Unit,
     onAddIngredient: (RecipeIngredient) -> Unit,
     onRemoveIngredient: (String) -> Unit,
     onSave: (Boolean) -> Unit
@@ -192,7 +197,9 @@ fun CreateRecipeScreenLayout(
                         onMinServingSizeChange = onMinServingSizeChange,
                         onUseMaxServingChange = onUseMaxServingChange,
                         onMaxServingSizeChange = onMaxServingSizeChange,
-                        onToggleTag = onToggleTag
+                        onToggleTag = onToggleTag,
+                        onCoverImageSelected = onCoverImageSelected,
+                        onRemoveCoverImage = onRemoveCoverImage
                     )
                     1 -> Step2Ingredients(
                         ingredients = uiState.ingredients,
@@ -358,6 +365,7 @@ private fun CreateRecipeStep1Preview() {
             onBaseServingSizeChange = {}, onUseMinServingChange = {},
             onMinServingSizeChange = {}, onUseMaxServingChange = {},
             onMaxServingSizeChange = {}, onToggleTag = {},
+            onCoverImageSelected = {}, onRemoveCoverImage = {},
             onAddIngredient = {}, onRemoveIngredient = {}, onSave = {}
         )
     }
@@ -388,6 +396,7 @@ private fun CreateRecipeStep2Preview() {
             onBaseServingSizeChange = {}, onUseMinServingChange = {},
             onMinServingSizeChange = {}, onUseMaxServingChange = {},
             onMaxServingSizeChange = {}, onToggleTag = {},
+            onCoverImageSelected = {}, onRemoveCoverImage = {},
             onAddIngredient = {}, onRemoveIngredient = {}, onSave = {}
         )
     }
@@ -421,6 +430,7 @@ private fun CreateRecipeStep3Preview() {
             onBaseServingSizeChange = {}, onUseMinServingChange = {},
             onMinServingSizeChange = {}, onUseMaxServingChange = {},
             onMaxServingSizeChange = {}, onToggleTag = {},
+            onCoverImageSelected = {}, onRemoveCoverImage = {},
             onAddIngredient = {}, onRemoveIngredient = {}, onSave = {}
         )
     }

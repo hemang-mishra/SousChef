@@ -56,7 +56,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -373,7 +375,7 @@ private fun StepContent(
 
                 // Media
                 if (!step.mediaUrl.isNullOrBlank()) {
-                    MediaSection(mediaUrl = step.mediaUrl)
+                    MediaSection(mediaUrl = step.mediaUrl, mediaType = step.mediaType)
                 }
             }
         }
@@ -497,19 +499,93 @@ private fun VisualCueRow(cue: String) {
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun MediaSection(mediaUrl: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .clip(RoundedCornerShape(12.dp))
-    ) {
-        AsyncImage(
-            model = mediaUrl,
-            contentDescription = "Step media",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
+private fun MediaSection(mediaUrl: String, mediaType: String? = null) {
+    val isVideo = mediaType == "video" ||
+            mediaUrl.contains(".mp4", ignoreCase = true) ||
+            mediaUrl.contains("video", ignoreCase = true)
+
+    if (isVideo) {
+        VideoPlayerSection(videoUrl = mediaUrl)
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .clip(RoundedCornerShape(12.dp))
+        ) {
+            AsyncImage(
+                model = mediaUrl,
+                contentDescription = "Step media",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+/**
+ * Lightweight video player using Android's VideoView wrapped in AndroidView.
+ * Loops automatically and provides play/pause + mute controls.
+ */
+@Composable
+private fun VideoPlayerSection(videoUrl: String) {
+    var isPlaying by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            val context = LocalContext.current
+
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx ->
+                    android.widget.VideoView(ctx).apply {
+                        setVideoURI(android.net.Uri.parse(videoUrl))
+                        setOnPreparedListener { mp ->
+                            mp.isLooping = true
+                            mp.setVolume(0f, 0f) // Muted by default
+                        }
+                    }
+                },
+                update = { videoView ->
+                    if (isPlaying && !videoView.isPlaying) {
+                        videoView.start()
+                    } else if (!isPlaying && videoView.isPlaying) {
+                        videoView.pause()
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Play/Pause overlay
+            if (!isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .clickable { isPlaying = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.PlayArrow,
+                        contentDescription = "Play video",
+                        tint = Color.White,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+            } else {
+                // Tap to pause
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { isPlaying = false }
+                )
+            }
+        }
     }
 }
 

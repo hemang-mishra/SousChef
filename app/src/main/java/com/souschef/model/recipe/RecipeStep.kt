@@ -17,6 +17,7 @@ data class RecipeStep(
     val flameLevel: String? = null,
     val expectedVisualCue: String? = null,
     val mediaUrl: String? = null,
+    val mediaType: String? = null, // "image" or "video"
     val ingredientReferences: List<String> = emptyList()
 )
 
