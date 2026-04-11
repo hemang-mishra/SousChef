@@ -5,7 +5,7 @@ package com.souschef.api
  *
  * Produces a structured system prompt that instructs Gemini to return
  * a JSON object containing:
- * - `ingredients[]` — complete ingredient list with quantities for the base serving size.
+ * - `ingredients[]` — complete ingredient list with realistic quantities for the base serving size.
  * - `steps[]` — atomic, single-ingredient cooking steps.
  *
  * The AI is expected to **infer** any missing details from culinary knowledge.
@@ -29,7 +29,7 @@ You are a professional chef and recipe writer. Your task is to take a recipe des
 
 IMPORTANT: The user may give a brief description like "Kadhai Paneer" or a detailed walkthrough. Either way, you MUST:
 1. Identify ALL ingredients needed (including implicit ones like oil, water, salt, etc.)
-2. Provide realistic quantities for $baseServingSize servings
+2. Provide realistic quantities for $baseServingSize servings — do NOT use placeholder values like 1.0 unless the real amount is actually 1 piece / 1 tsp / 1 cup
 3. Break the cooking process into precise, atomic steps
 
 OUTPUT FORMAT — Return a single JSON object with two arrays:
@@ -51,6 +51,9 @@ Rules:
 - Include EVERY ingredient, even obvious ones (oil, water, salt).
 - Use realistic quantities a home cook would actually use.
 - If the description doesn't specify exact amounts, use your culinary expertise to estimate.
+- Never leave quantities generic. Every ingredient must have a concrete amount and unit that matches the actual recipe yield.
+- Prefer the most natural culinary unit for the ingredient (e.g. grams for dry goods, ml for liquids, pieces for countable items).
+- If an ingredient appears in a step, its quantity must still be represented in the ingredients array with the full recipe amount.
 
 ═══════════════════════════════════════
 STEPS ARRAY

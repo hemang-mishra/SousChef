@@ -1,6 +1,7 @@
 package com.souschef.service.ingredient
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.Query
 import com.souschef.model.ingredient.GlobalIngredient
 import kotlinx.coroutines.channels.awaitClose
@@ -76,7 +77,7 @@ class FirebaseIngredientService(
         // Firestore whereIn supports max 30 items per query
         return ids.chunked(30).flatMap { chunk ->
             ingredientsCollection
-                .whereIn("ingredientId", chunk)
+                .whereIn(FieldPath.documentId(), chunk)
                 .get().await()
                 .toObjects(GlobalIngredient::class.java)
         }
