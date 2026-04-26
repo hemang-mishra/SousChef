@@ -41,6 +41,7 @@ class AppPreferences(private val context: Context) {
         private val LAST_SYNC_TIME    = stringPreferencesKey("last_sync_time")
         private val CACHED_USER_UID   = stringPreferencesKey("cached_user_uid")
         private val COMPARTMENTS_JSON = stringPreferencesKey("dispenser_compartments")
+        private val PREFERRED_LANGUAGE_CODE = stringPreferencesKey("preferred_lang_code")
     }
 
     // ── Auth / sync ───────────────────────────────────────────────────────────
@@ -111,6 +112,29 @@ class AppPreferences(private val context: Context) {
 
             override suspend fun get(): List<Compartment> = getFlow().first()
         }
+
+    // ── Translation / Localization ──────────────────────────────────────────
+
+    /**
+     * Preferred language code for recipe translation (e.g. "hi" for Hindi, "es" for Spanish).
+     * If null, the app stays in English.
+     */
+    val preferredLanguageCode: DataStorePreference<String?> = object : DataStorePreference<String?> {
+        override fun getFlow(): Flow<String?> =
+            context.dataStore.data
+                .catch { emit(emptyPreferences()) }
+                .map { it[PREFERRED_LANGUAGE_CODE] }
+                .distinctUntilChanged()
+
+        override suspend fun set(value: String?) {
+            context.dataStore.edit { prefs ->
+                if (value == null) prefs.remove(PREFERRED_LANGUAGE_CODE)
+                else prefs[PREFERRED_LANGUAGE_CODE] = value
+            }
+        }
+
+        override suspend fun get(): String? = getFlow().first()
+    }
 
     // ── Global helpers ────────────────────────────────────────────────────────
 

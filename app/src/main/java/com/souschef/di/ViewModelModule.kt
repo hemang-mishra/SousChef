@@ -11,6 +11,7 @@ import com.souschef.ui.screens.ingredient.library.IngredientLibraryViewModel
 import com.souschef.ui.screens.recipe.cooking.CookingModeViewModel
 import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
 import com.souschef.ui.screens.recipe.overview.RecipeOverviewViewModel
+import com.souschef.ui.screens.savedrecipes.SavedRecipesViewModel
 import com.souschef.ui.viewmodels.AppViewModel
 import org.koin.dsl.module
 
@@ -24,20 +25,23 @@ import org.koin.dsl.module
  */
 val viewModelModule = module {
     // App-level — single (survives navigation)
-    single { AppViewModel(get()) }
+    single { AppViewModel(get(), get()) }
 
     // Auth screens — factory (fresh per navigation)
     factory { LoginViewModel(get()) }
     factory { SignUpViewModel(get()) }
 
     // Home — factory, needs userId + userName
+    factory { (userId: String, userName: String, preferredLang: String?) ->
+        HomeViewModel(get(), userId, userName, preferredLang)
+    }
     factory { (userId: String, userName: String) ->
-        HomeViewModel(get(), userId, userName)
+        SavedRecipesViewModel(get(), userId, userName)
     }
 
     // Recipe creation — factory, needs currentUser from AppViewModel and optional recipeId
     factory { (currentUser: com.souschef.model.auth.UserProfile, recipeId: String?) ->
-        CreateRecipeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), currentUser, recipeId)
+        CreateRecipeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), currentUser, recipeId)
     }
 
     // Recipe overview — factory, needs recipeId and currentUser

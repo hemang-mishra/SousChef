@@ -1,5 +1,6 @@
 package com.souschef.service.recipe
 
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.souschef.model.recipe.Recipe
@@ -64,13 +65,39 @@ class FirebaseRecipeService(
     }
 
     /**
-     * Adds a step to the recipe's sub-collection.
+     * Real-time Flow of all recipes, ordered by creation date.
+     */
+    fun getAllRecipesFlow(): Flow<List<Recipe>> = callbackFlow {
+        val query = recipesCollection
+//            .whereEqualTo("hasSteps",true)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+
+        val registration = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                close(error)
+                return@addSnapshotListener
+            }
+            val recipes = snapshot?.toObjects(Recipe::class.java) ?: emptyList()
+            trySend(recipes)
+        }
+        awaitClose { registration.remove() }
+    }
+
+    /**
+     * Adds a step to the recipe's sub-collection and updates parent recipe metadata.
      */
     suspend fun addStep(recipeId: String, step: RecipeStep) {
         val stepsCollection = recipesCollection.document(recipeId).collection("steps")
         val docRef = stepsCollection.document()
         val stepWithId = step.copy(stepId = docRef.id)
-        docRef.set(stepWithId).await()
+        
+        val batch = firestore.batch()
+        batch.set(docRef, stepWithId)
+        batch.update(recipesCollection.document(recipeId), mapOf(
+            "hasSteps" to true,
+            "stepCount" to FieldValue.increment(1)
+        ))
+        batch.commit().await()
     }
 
     /**
@@ -94,7 +121,7 @@ class FirebaseRecipeService(
     }
 
     /**
-     * Deletes all steps in a recipe's steps sub-collection.
+     * Deletes all steps in a recipe's steps sub-collection and updates parent recipe metadata.
      * Used before re-generating steps via AI to avoid duplicates.
      */
     suspend fun deleteAllSteps(recipeId: String) {
@@ -104,11 +131,15 @@ class FirebaseRecipeService(
         existingSteps.documents.forEach { doc ->
             batch.delete(doc.reference)
         }
+        batch.update(recipesCollection.document(recipeId), mapOf(
+            "hasSteps" to false,
+            "stepCount" to 0
+        ))
         batch.commit().await()
     }
 
     /**
-     * Writes multiple steps to a recipe's sub-collection in a single batch.
+     * Writes multiple steps to a recipe's sub-collection in a single batch and updates parent recipe metadata.
      * Each step gets an auto-generated document ID and its stepNumber is preserved.
      */
     suspend fun batchAddSteps(recipeId: String, steps: List<RecipeStep>) {
@@ -118,6 +149,12 @@ class FirebaseRecipeService(
             val docRef = stepsCollection.document()
             val stepWithId = step.copy(stepId = docRef.id)
             batch.set(docRef, stepWithId)
+        }
+        if (steps.isNotEmpty()) {
+            batch.update(recipesCollection.document(recipeId), mapOf(
+                "hasSteps" to true,
+                "stepCount" to FieldValue.increment(steps.size.toLong())
+            ))
         }
         batch.commit().await()
     }

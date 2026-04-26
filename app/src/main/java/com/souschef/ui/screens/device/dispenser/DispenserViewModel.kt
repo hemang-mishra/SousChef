@@ -76,6 +76,10 @@ class DispenserViewModel(
         bleDeviceManager.scanAndConnect()
     }
 
+    fun onError(message: String) {
+        _error.value = message
+    }
+
     fun onDisconnect() {
         bleDeviceManager.disconnect()
     }

@@ -48,7 +48,7 @@ class CreateRecipeUseCase(
             description = description.trim(),
             creatorId = currentUser.uid,
             creatorName = currentUser.displayName,
-            isVerifiedChefRecipe = currentUser.isVerifiedChef,
+            isVerifiedChef = currentUser.isVerifiedChef,
             baseServingSize = baseServingSize,
             minServingSize = minServingSize,
             maxServingSize = maxServingSize,

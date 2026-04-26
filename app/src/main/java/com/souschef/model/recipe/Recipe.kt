@@ -4,6 +4,7 @@ package com.souschef.model.recipe
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.PropertyName
 
 /**
  * Firestore document model for a recipe.
@@ -21,7 +22,9 @@ data class Recipe(
     val description: String = "",
     val creatorId: String = "",
     val creatorName: String = "",
-    val isVerifiedChefRecipe: Boolean = false,
+    @get:PropertyName("verifiedChefRecipe")
+    @set:PropertyName("verifiedChefRecipe")
+    var isVerifiedChef: Boolean = false,
     val baseServingSize: Int = 4,
     val minServingSize: Int? = null,
     val maxServingSize: Int? = null,
@@ -30,6 +33,8 @@ data class Recipe(
     val originalRecipeId: String? = null,
     val createdAt: Timestamp = Timestamp.now(),
     val updatedAt: Timestamp = Timestamp.now(),
+    val stepCount: Int = 0,
+    val hasSteps: Boolean = false,
     val tags: List<String> = emptyList(),
     val ingredients: List<RecipeIngredient> = emptyList()
 )

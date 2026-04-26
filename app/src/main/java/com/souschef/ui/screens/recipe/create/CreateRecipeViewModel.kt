@@ -48,9 +48,20 @@ class CreateRecipeViewModel(
     private val recipeRepository: RecipeRepository,
     private val ingredientRepository: IngredientRepository,
     private val storageService: FirebaseStorageService,
+    private val voiceToTextParser: com.souschef.util.VoiceToTextParser,
     private val currentUser: UserProfile,
     private val recipeId: String? = null
 ) : ViewModel() {
+
+    val voiceState = voiceToTextParser.state
+
+    fun startListening() {
+        voiceToTextParser.startListening()
+    }
+
+    fun stopListening() {
+        voiceToTextParser.stopListening()
+    }
 
     // ── Step 0: Details ──────────────────────────────────────
     private val _currentStep = MutableStateFlow(0)

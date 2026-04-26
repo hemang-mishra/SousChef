@@ -15,6 +15,7 @@ interface RecipeRepository {
     fun getRecipe(recipeId: String): Flow<Resource<Recipe>>
     fun getRecipeWithSteps(recipeId: String): Flow<Resource<Pair<Recipe, List<RecipeStep>>>>
     fun getRecipesByCreator(creatorId: String): Flow<List<Recipe>>
+    fun getAllRecipes(): Flow<List<Recipe>>
     fun addStep(recipeId: String, step: RecipeStep): Flow<Resource<Unit>>
     fun getSteps(recipeId: String): Flow<Resource<List<RecipeStep>>>
     fun deleteAllSteps(recipeId: String): Flow<Resource<Unit>>

@@ -89,6 +89,17 @@ import com.souschef.ui.components.PremiumTextButton
 import com.souschef.ui.theme.AppColors
 import com.souschef.ui.theme.CustomShapes
 
+import android.Manifest
+import android.app.Application
+import android.content.pm.PackageManager
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.souschef.util.VoiceToTextParser
+
 // ─────────────────────────────────────────────────────────────
 // Step 3: Cooking Steps (AI Generate / Manual — Optional)
 // ─────────────────────────────────────────────────────────────
@@ -161,6 +172,35 @@ private fun StepsInputStage(
     onAddManualStep: () -> Unit,
     onSkip: () -> Unit
 ) {
+    val context = LocalContext.current
+    val voiceParser = remember { VoiceToTextParser(context.applicationContext as Application) }
+    val voiceState by voiceParser.state.collectAsState()
+
+    var hasVoicePermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasVoicePermission = isGranted
+        if (isGranted) {
+            voiceParser.startListening()
+        }
+    }
+
+    LaunchedEffect(voiceState.spokenText) {
+        if (voiceState.spokenText.isNotBlank()) {
+            val separator = if (aiDescription.isBlank()) "" else " "
+            onAiDescriptionChange(aiDescription + separator + voiceState.spokenText)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -175,20 +215,6 @@ private fun StepsInputStage(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(AppColors.gold().copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = AppColors.gold(),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
             Column {
                 Text(
                     text = "Add Cooking Steps",
@@ -251,11 +277,54 @@ private fun StepsInputStage(
 
                 Spacer(Modifier.height(16.dp))
 
-                PremiumButton(
-                    text = "✨ Generate Recipe with AI",
-                    onClick = onGenerateSteps,
-                    enabled = aiDescription.isNotBlank()
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        PremiumButton(
+                            text = "Generate Steps with AI",
+                            onClick = onGenerateSteps,
+                            enabled = aiDescription.isNotBlank()
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(if (voiceState.isSpeaking) AppColors.error().copy(alpha = 0.15f) else AppColors.gold().copy(alpha = 0.15f))
+                            .clickable {
+                                if (voiceState.isSpeaking) {
+                                    voiceParser.stopListening()
+                                } else {
+                                    if (hasVoicePermission) {
+                                        voiceParser.startListening()
+                                    } else {
+                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (voiceState.isSpeaking) {
+                            Icon(
+                                Icons.Default.Stop,
+                                contentDescription = "Stop Listening",
+                                tint = AppColors.error(),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = "Start Voice Input",
+                                tint = AppColors.gold(),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 

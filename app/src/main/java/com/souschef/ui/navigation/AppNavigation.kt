@@ -22,7 +22,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.souschef.model.auth.UserProfile
-import com.souschef.ui.components.FullScreenLoader
+import com.souschef.ui.components.AppNavigationShimmer
 import com.souschef.ui.components.SousChefBottomNavBar
 import com.souschef.ui.screens.auth.login.LoginScreen
 import com.souschef.ui.screens.auth.signup.SignUpScreen
@@ -40,6 +40,7 @@ import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
 import com.souschef.ui.screens.recipe.overview.RecipeOverviewScreen
 import com.souschef.ui.screens.recipe.overview.RecipeOverviewViewModel
 import com.souschef.ui.screens.savedrecipes.SavedRecipesScreen
+import com.souschef.ui.screens.savedrecipes.SavedRecipesViewModel
 import com.souschef.ui.theme.SousChefTheme
 import com.souschef.ui.viewmodels.AppViewModel
 import org.koin.compose.koinInject
@@ -73,7 +74,7 @@ fun AppNavigation() {
     // Show loading until initial auth check completes
     if (!authChecked) {
         SousChefTheme {
-            FullScreenLoader(message = "Loading…")
+            AppNavigationShimmer()
         }
         return
     }
@@ -176,9 +177,10 @@ fun AppNavigation() {
                 // ── Home (Phase 7) ───────────────────────────
                 entry<Screens.NavHomeRoute> {
                     val currentUser by appViewModel.currentUser.collectAsState()
+                    val preferredLang by appViewModel.preferredLanguageCode.collectAsState()
                     val user = currentUser ?: UserProfile()
                     val homeViewModel: HomeViewModel = koinInject {
-                        parametersOf(user.uid, user.displayName)
+                        parametersOf(user.uid, user.displayName, preferredLang)
                     }
                     HomeScreen(
                         viewModel = homeViewModel,
@@ -198,11 +200,11 @@ fun AppNavigation() {
                 entry<Screens.NavSavedRecipesRoute> {
                     val currentUser by appViewModel.currentUser.collectAsState()
                     val user = currentUser ?: UserProfile()
-                    val homeViewModel: HomeViewModel = koinInject {
+                    val savedRecipesViewModel: SavedRecipesViewModel = koinInject {
                         parametersOf(user.uid, user.displayName)
                     }
                     SavedRecipesScreen(
-                        viewModel = homeViewModel,
+                        viewModel = savedRecipesViewModel,
                         onRecipeTap = { recipeId ->
                             backstack.add(Screens.NavRecipeOverviewRoute(recipeId))
                         },
@@ -218,8 +220,11 @@ fun AppNavigation() {
                 // ── Profile (Phase 7) ────────────────────────
                 entry<Screens.NavProfileRoute> {
                     val currentUser by appViewModel.currentUser.collectAsState()
+                    val preferredLang by appViewModel.preferredLanguageCode.collectAsState()
                     ProfileScreen(
                         userProfile = currentUser,
+                        preferredLanguageCode = preferredLang,
+                        onSetPreferredLanguage = { code -> appViewModel.setPreferredLanguage(code) },
                         onSignOut = { appViewModel.signOut() }
                     )
                 }

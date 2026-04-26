@@ -2,6 +2,7 @@ package com.souschef.di
 
 import com.souschef.api.GeminiProvider
 import com.souschef.api.ble.BleDeviceManager
+import com.souschef.util.VoiceToTextParser
 import com.souschef.service.ai.GeminiRecipeService
 import com.souschef.service.auth.FirebaseAuthService
 import com.souschef.service.device.DevicePreferenceService
@@ -21,6 +22,7 @@ val serviceModule = module {
     single { FirebaseIngredientService(get()) }
     single { GeminiRecipeService(GeminiProvider.getModel()) }
     single { FirebaseStorageService(get()) }
+    single { VoiceToTextParser(androidApplication()) }
 
     // ── Phase 5: Hardware ─────────────────────────────────────────────────────
     /** BLE manager — single so the connection survives navigation. */

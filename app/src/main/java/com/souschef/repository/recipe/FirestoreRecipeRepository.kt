@@ -60,6 +60,10 @@ class FirestoreRecipeRepository(
         return service.getRecipesByCreatorFlow(creatorId)
     }
 
+    override fun getAllRecipes(): Flow<List<Recipe>> {
+        return service.getAllRecipesFlow()
+    }
+
     override fun addStep(recipeId: String, step: RecipeStep): Flow<Resource<Unit>> = flow {
         emit(Resource.loading())
         val result = safeFirestoreCall { service.addStep(recipeId, step) }

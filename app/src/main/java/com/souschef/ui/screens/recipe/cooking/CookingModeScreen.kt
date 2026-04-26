@@ -3,6 +3,8 @@ package com.souschef.ui.screens.recipe.cooking
 import android.app.Activity
 import android.content.res.Configuration
 import android.view.WindowManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
@@ -60,6 +62,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,7 +82,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.souschef.model.recipe.RecipeStep
 import com.souschef.model.recipe.ResolvedIngredient
-import com.souschef.ui.components.FullScreenLoader
+import com.souschef.permissions.BlePermissionHelper
+import com.souschef.ui.components.CookingModeShimmer
 import com.souschef.ui.components.GlassCard
 import com.souschef.ui.components.PremiumButton
 import com.souschef.ui.components.PremiumDivider
@@ -88,6 +92,7 @@ import com.souschef.ui.components.PremiumSectionHeader
 import com.souschef.ui.theme.AppColors
 import com.souschef.ui.theme.GoldVibrant
 import com.souschef.ui.theme.SousChefTheme
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
@@ -103,9 +108,28 @@ fun CookingModeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Permission launcher for BLE dispensing
+    var pendingDispenseData by remember { mutableStateOf<DispenseData?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        if (allGranted) {
+            pendingDispenseData?.let { data ->
+                viewModel.dispenseIngredient(data.id, data.name, data.quantity, data.unit)
+            }
+        } else {
+            scope.launch {
+                snackbarHostState.showSnackbar("Bluetooth permissions are required to dispense.")
+            }
+        }
+        pendingDispenseData = null
+    }
 
     // Keep screen awake while cooking
-    val context = LocalContext.current
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -134,14 +158,22 @@ fun CookingModeScreen(
         onPauseTimer = viewModel::pauseTimer,
         onResetTimer = viewModel::resetTimer,
         onDispense = { globalIngredientId, name, quantity, unit ->
-            viewModel.dispenseIngredient(globalIngredientId, name, quantity, unit)
+            if (BlePermissionHelper.hasAllPermissions(context)) {
+                viewModel.dispenseIngredient(globalIngredientId, name, quantity, unit)
+            } else {
+                pendingDispenseData = DispenseData(globalIngredientId, name, quantity, unit)
+                permissionLauncher.launch(BlePermissionHelper.requiredPermissions)
+            }
         }
     )
 }
 
+private data class DispenseData(val id: String, val name: String, val quantity: Double, val unit: String)
+
 // ─────────────────────────────────────────────────────────────
 // Stateless Layout
 // ─────────────────────────────────────────────────────────────
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,7 +190,7 @@ fun CookingModeScreenLayout(
     onDispense: (String, String, Double, String) -> Unit
 ) {
     if (uiState.isLoading) {
-        FullScreenLoader(message = "Preparing your cooking session…")
+        CookingModeShimmer()
         return
     }
 

@@ -62,7 +62,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.souschef.model.recipe.Recipe
 import com.souschef.model.recipe.ResolvedIngredient
-import com.souschef.ui.components.FullScreenLoader
 import com.souschef.ui.components.GlassCard
 import com.souschef.ui.components.PrimaryButton
 import com.souschef.ui.components.SectionHeader
@@ -74,181 +73,194 @@ import kotlin.math.roundToInt
 
 @Composable
 fun RecipeOverviewScreen(
-	onBack: () -> Unit,
-	onStartCooking: (selectedServings: Int, spiceLevel: Float, saltLevel: Float, sweetnessLevel: Float) -> Unit,
-	onEditRecipe: (String) -> Unit,
-	viewModel: RecipeOverviewViewModel = koinInject()
+    onBack: () -> Unit,
+    onStartCooking: (selectedServings: Int, spiceLevel: Float, saltLevel: Float, sweetnessLevel: Float) -> Unit,
+    onEditRecipe: (String) -> Unit,
+    viewModel: RecipeOverviewViewModel = koinInject()
 ) {
-	val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
-	LaunchedEffect(uiState.isDeleted) {
-		if (uiState.isDeleted) {
-			onBack()
-		}
-	}
+    LaunchedEffect(uiState.isDeleted) {
+        if (uiState.isDeleted) {
+            onBack()
+        }
+    }
 
-	RecipeOverviewContent(
-		uiState = uiState,
-		onBack = onBack,
-		onServingsChanged = viewModel::onServingsChanged,
-		onSpiceLevelChanged = viewModel::onSpiceLevelChanged,
-		onSaltLevelChanged = viewModel::onSaltLevelChanged,
-		onSweetnessLevelChanged = viewModel::onSweetnessLevelChanged,
-		onStartCooking = {
-			onStartCooking(
-				uiState.selectedServings,
-				uiState.spiceLevel,
-				uiState.saltLevel,
-				uiState.sweetnessLevel
-			)
-		},
-		onEditRecipe = { uiState.recipe?.let { onEditRecipe(it.recipeId) } },
-		onDeleteRecipe = viewModel::onDeleteRecipe
-	)
+    RecipeOverviewContent(
+        uiState = uiState,
+        onBack = onBack,
+        onServingsChanged = viewModel::onServingsChanged,
+        onSpiceLevelChanged = viewModel::onSpiceLevelChanged,
+        onSaltLevelChanged = viewModel::onSaltLevelChanged,
+        onSweetnessLevelChanged = viewModel::onSweetnessLevelChanged,
+        onStartCooking = {
+            onStartCooking(
+                uiState.selectedServings,
+                uiState.spiceLevel,
+                uiState.saltLevel,
+                uiState.sweetnessLevel
+            )
+        },
+        onEditRecipe = { uiState.recipe?.let { onEditRecipe(it.recipeId) } },
+        onDeleteRecipe = viewModel::onDeleteRecipe
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeOverviewContent(
-	uiState: RecipeOverviewUiState,
-	onBack: () -> Unit,
-	onServingsChanged: (Int) -> Unit,
-	onSpiceLevelChanged: (Float) -> Unit,
-	onSaltLevelChanged: (Float) -> Unit,
-	onSweetnessLevelChanged: (Float) -> Unit,
-	onStartCooking: () -> Unit,
-	onEditRecipe: () -> Unit,
-	onDeleteRecipe: () -> Unit
+    uiState: RecipeOverviewUiState,
+    onBack: () -> Unit,
+    onServingsChanged: (Int) -> Unit,
+    onSpiceLevelChanged: (Float) -> Unit,
+    onSaltLevelChanged: (Float) -> Unit,
+    onSweetnessLevelChanged: (Float) -> Unit,
+    onStartCooking: () -> Unit,
+    onEditRecipe: () -> Unit,
+    onDeleteRecipe: () -> Unit
 ) {
-	val recipe = uiState.recipe
+    val recipe = uiState.recipe
 
-	if (uiState.isLoading) {
-		FullScreenLoader(message = "Preparing your recipe...")
-		return
-	}
+    if (uiState.isLoading) {
 
-	if (recipe == null) {
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(MaterialTheme.colorScheme.background),
-			contentAlignment = Alignment.Center
-		) {
-			Text(
-				text = uiState.error ?: "Recipe not available",
-				color = MaterialTheme.colorScheme.onBackground,
-				style = MaterialTheme.typography.bodyLarge
-			)
-		}
-		return
-	}
+        return
+    }
 
-	val minServings = recipe.minServingSize ?: 1
-	val maxServings = recipe.maxServingSize ?: (recipe.baseServingSize * 4).coerceAtLeast(minServings)
+    if (recipe == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = uiState.error ?: "Recipe not available",
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+        return
+    }
 
-	var showMenu by remember { mutableStateOf(false) }
-	var showDeleteDialog by remember { mutableStateOf(false) }
-	val showOptions = uiState.currentUserId != null && uiState.currentUserId == recipe.creatorId
+    val minServings = recipe.minServingSize ?: 1
+    val maxServings =
+        recipe.maxServingSize ?: (recipe.baseServingSize * 4).coerceAtLeast(minServings)
 
-	if (showDeleteDialog) {
-		AlertDialog(
-			onDismissRequest = { showDeleteDialog = false },
-			title = { Text("Delete Recipe") },
-			text = { Text("Are you sure you want to delete this recipe? This action cannot be undone.") },
-			confirmButton = {
-				Button(
-					onClick = {
-						showDeleteDialog = false
-						onDeleteRecipe()
-					},
-					colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-				) {
-					Text("Delete")
-				}
-			},
-			dismissButton = {
-				TextButton(onClick = { showDeleteDialog = false }) {
-					Text("Cancel")
-				}
-			}
-		)
-	}
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val showOptions = uiState.currentUserId != null && uiState.currentUserId == recipe.creatorId
 
-	Scaffold(
-		topBar = {
-			TopAppBar(
-				windowInsets = WindowInsets(top = 0.dp),
-				title = { Text(text = "Recipe Overview") },
-				navigationIcon = {
-					IconButton(onClick = onBack) {
-						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-					}
-				},
-				actions = {
-					if (showOptions) {
-						IconButton(onClick = { showMenu = true }) {
-							Icon(Icons.Default.MoreVert, contentDescription = "Options")
-						}
-						DropdownMenu(
-							expanded = showMenu,
-							onDismissRequest = { showMenu = false }
-						) {
-							DropdownMenuItem(
-								text = { Text("Edit Recipe") },
-								onClick = {
-									showMenu = false
-									onEditRecipe()
-								}
-							)
-							DropdownMenuItem(
-								text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-								onClick = {
-									showMenu = false
-									showDeleteDialog = true
-								}
-							)
-						}
-					}
-				},
-				colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-			)
-		},
-		bottomBar = {
-			PrimaryButton(
-				text = "Start Cooking",
-				onClick = onStartCooking,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = 20.dp, vertical = 14.dp)
-			)
-		},
-		containerColor = MaterialTheme.colorScheme.background
-	) { padding ->
-		Column(
-			modifier = Modifier
-				.fillMaxSize()
-				.padding(padding)
-				.verticalScroll(rememberScrollState())
-				.padding(bottom = 12.dp)
-		) {
-			HeroSection(recipe = recipe)
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Recipe") },
+            text = { Text("Are you sure you want to delete this recipe? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDeleteRecipe()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
-			ServingSelectorCard(
-				selectedServings = uiState.selectedServings,
-				minServings = minServings,
-				maxServings = maxServings,
-				onDecrease = { onServingsChanged((uiState.selectedServings - 1).coerceAtLeast(minServings)) },
-				onIncrease = { onServingsChanged((uiState.selectedServings + 1).coerceAtMost(maxServings)) }
-			)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                windowInsets = WindowInsets(top = 0.dp),
+                title = { Text(text = "Recipe Overview") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (showOptions) {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Options")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Edit Recipe") },
+                                onClick = {
+                                    showMenu = false
+                                    onEditRecipe()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteDialog = true
+                                }
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+        },
+        bottomBar = {
+            PrimaryButton(
+                text = "Start Cooking",
+                onClick = onStartCooking,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp)
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 12.dp)
+        ) {
+            HeroSection(recipe = recipe)
 
-			FlavorCustomizationCard(
-				spiceLevel = uiState.spiceLevel,
-				saltLevel = uiState.saltLevel,
-				sweetnessLevel = uiState.sweetnessLevel,
-				onSpiceLevelChanged = onSpiceLevelChanged,
-				onSaltLevelChanged = onSaltLevelChanged,
-				onSweetnessLevelChanged = onSweetnessLevelChanged
-			)
+            ServingSelectorCard(
+                selectedServings = uiState.selectedServings,
+                minServings = minServings,
+                maxServings = maxServings,
+                onDecrease = {
+                    onServingsChanged(
+                        (uiState.selectedServings - 1).coerceAtLeast(
+                            minServings
+                        )
+                    )
+                },
+                onIncrease = {
+                    onServingsChanged(
+                        (uiState.selectedServings + 1).coerceAtMost(
+                            maxServings
+                        )
+                    )
+                }
+            )
+
+            FlavorCustomizationCard(
+                spiceLevel = uiState.spiceLevel,
+                saltLevel = uiState.saltLevel,
+                sweetnessLevel = uiState.sweetnessLevel,
+                onSpiceLevelChanged = onSpiceLevelChanged,
+                onSaltLevelChanged = onSaltLevelChanged,
+                onSweetnessLevelChanged = onSweetnessLevelChanged
+            )
 
 			val dispensable = uiState.adjustedIngredients.filter { it.isDispensable }
 			val manual = uiState.adjustedIngredients.filter { !it.isDispensable }
@@ -298,268 +310,280 @@ fun RecipeOverviewContent(
 
 @Composable
 private fun HeroSection(recipe: Recipe) {
-	Box(
-		modifier = Modifier
-			.fillMaxWidth()
-			.height(250.dp)
-	) {
-		if (!recipe.coverImageUrl.isNullOrBlank()) {
-			AsyncImage(
-				model = recipe.coverImageUrl,
-				contentDescription = recipe.title,
-				modifier = Modifier.fillMaxSize(),
-				contentScale = ContentScale.Crop
-			)
-		} else {
-			// Gradient fallback when no cover image
-			Box(
-				modifier = Modifier
-					.fillMaxSize()
-					.background(
-						Brush.linearGradient(
-							colors = listOf(
-								AppColors.gold().copy(alpha = 0.6f),
-								AppColors.gold().copy(alpha = 0.2f),
-								MaterialTheme.colorScheme.surface
-							)
-						)
-					)
-			)
-		}
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(250.dp)
+    ) {
+        if (!recipe.coverImageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = recipe.coverImageUrl,
+                contentDescription = recipe.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            // Gradient fallback when no cover image
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                AppColors.gold().copy(alpha = 0.6f),
+                                AppColors.gold().copy(alpha = 0.2f),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    )
+            )
+        }
 
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(
-					Brush.verticalGradient(
-						colors = listOf(
-							Color.Transparent,
-							AppColors.heroBackground().copy(alpha = 0.8f)
-						)
-					)
-				)
-		)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            AppColors.heroBackground().copy(alpha = 0.8f)
+                        )
+                    )
+                )
+        )
 
-		Column(
-			modifier = Modifier
-				.align(Alignment.BottomStart)
-				.padding(16.dp)
-		) {
-			Text(
-				text = recipe.title,
-				style = MaterialTheme.typography.headlineSmall,
-				fontWeight = FontWeight.Bold,
-				color = Color.White,
-				maxLines = 2,
-				overflow = TextOverflow.Ellipsis
-			)
-			Spacer(modifier = Modifier.height(6.dp))
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(
-					text = "by ${recipe.creatorName}",
-					style = MaterialTheme.typography.bodyMedium,
-					color = Color.White.copy(alpha = 0.92f)
-				)
-				if (recipe.isVerifiedChefRecipe) {
-					Spacer(modifier = Modifier.width(8.dp))
-					VerifiedChefBadge()
-				}
-			}
-		}
-	}
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(16.dp)
+        ) {
+            Text(
+                text = recipe.title,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "by ${recipe.creatorName}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.92f)
+                )
+                if (recipe.isVerifiedChef) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    VerifiedChefBadge()
+                }
+            }
+        }
+    }
 }
 
 @Composable
 private fun ServingSelectorCard(
-	selectedServings: Int,
-	minServings: Int,
-	maxServings: Int,
-	onDecrease: () -> Unit,
-	onIncrease: () -> Unit
+    selectedServings: Int,
+    minServings: Int,
+    maxServings: Int,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit
 ) {
-	Card(
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(horizontal = 16.dp, vertical = 14.dp),
-		colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-		shape = RoundedCornerShape(20.dp)
-	) {
-		Column(modifier = Modifier.padding(18.dp)) {
-			Text(
-				text = "How many are you cooking for?",
-				style = MaterialTheme.typography.titleMedium,
-				color = MaterialTheme.colorScheme.onSurface
-			)
-			Spacer(modifier = Modifier.height(10.dp))
-			Row(
-				modifier = Modifier.fillMaxWidth(),
-				verticalAlignment = Alignment.CenterVertically,
-				horizontalArrangement = Arrangement.SpaceBetween
-			) {
-				StepperButton(
-					icon = Icons.Outlined.Remove,
-					enabled = selectedServings > minServings,
-					onClick = onDecrease
-				)
-				Text(
-					text = selectedServings.toString(),
-					style = MaterialTheme.typography.headlineSmall,
-					fontWeight = FontWeight.SemiBold,
-					color = MaterialTheme.colorScheme.onSurface
-				)
-				StepperButton(
-					icon = Icons.Outlined.Add,
-					enabled = selectedServings < maxServings,
-					onClick = onIncrease
-				)
-			}
-			Spacer(modifier = Modifier.height(8.dp))
-			Text(
-				text = "Serves $minServings-$maxServings",
-				style = MaterialTheme.typography.bodySmall,
-				color = MaterialTheme.colorScheme.onSurfaceVariant
-			)
-		}
-	}
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = "How many are you cooking for?",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                StepperButton(
+                    icon = Icons.Outlined.Remove,
+                    enabled = selectedServings > minServings,
+                    onClick = onDecrease
+                )
+                Text(
+                    text = selectedServings.toString(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                StepperButton(
+                    icon = Icons.Outlined.Add,
+                    enabled = selectedServings < maxServings,
+                    onClick = onIncrease
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Serves $minServings-$maxServings",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable
 private fun StepperButton(
-	icon: ImageVector,
-	enabled: Boolean,
-	onClick: () -> Unit
+    icon: ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit
 ) {
-	IconButton(
-		onClick = onClick,
-		enabled = enabled,
-		modifier = Modifier
-			.size(40.dp)
-			.clip(CircleShape)
-			.background(MaterialTheme.colorScheme.surfaceVariant)
-	) {
-		Icon(
-			imageVector = icon,
-			contentDescription = null,
-			tint = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-		)
-	}
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
 private fun FlavorCustomizationCard(
-	spiceLevel: Float,
-	saltLevel: Float,
-	sweetnessLevel: Float,
-	onSpiceLevelChanged: (Float) -> Unit,
-	onSaltLevelChanged: (Float) -> Unit,
-	onSweetnessLevelChanged: (Float) -> Unit
+    spiceLevel: Float,
+    saltLevel: Float,
+    sweetnessLevel: Float,
+    onSpiceLevelChanged: (Float) -> Unit,
+    onSaltLevelChanged: (Float) -> Unit,
+    onSweetnessLevelChanged: (Float) -> Unit
 ) {
-	GlassCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-		Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-			Text(
-				text = "Flavor customization",
-				style = MaterialTheme.typography.titleMedium,
-				color = MaterialTheme.colorScheme.onSurface
-			)
-			FlavorSliderRow(
-				label = "Spice",
-				emoji = "🌶",
-				level = spiceLevel,
-				onLevelChanged = onSpiceLevelChanged
-			)
-			FlavorSliderRow(
-				label = "Salt",
-				emoji = "🧂",
-				level = saltLevel,
-				onLevelChanged = onSaltLevelChanged
-			)
-			FlavorSliderRow(
-				label = "Sweetness",
-				emoji = "🍯",
-				level = sweetnessLevel,
-				onLevelChanged = onSweetnessLevelChanged
-			)
-		}
-	}
+    GlassCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                text = "Flavor customization",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            FlavorSliderRow(
+                label = "Spice",
+                emoji = "🌶",
+                level = spiceLevel,
+                onLevelChanged = onSpiceLevelChanged
+            )
+            FlavorSliderRow(
+                label = "Salt",
+                emoji = "🧂",
+                level = saltLevel,
+                onLevelChanged = onSaltLevelChanged
+            )
+            FlavorSliderRow(
+                label = "Sweetness",
+                emoji = "🍯",
+                level = sweetnessLevel,
+                onLevelChanged = onSweetnessLevelChanged
+            )
+        }
+    }
 }
 
 @Composable
 private fun FlavorSliderRow(
-	label: String,
-	emoji: String,
-	level: Float,
-	onLevelChanged: (Float) -> Unit
+    label: String,
+    emoji: String,
+    level: Float,
+    onLevelChanged: (Float) -> Unit
 ) {
-	Column {
-		Text(
-			text = "$emoji $label",
-			style = MaterialTheme.typography.labelLarge,
-			color = MaterialTheme.colorScheme.onSurface
-		)
-		Slider(
-			value = level.toSliderValue(),
-			onValueChange = { slider -> onLevelChanged(slider.toFlavorLevel()) },
-			valueRange = 0f..1f
-		)
-		Row(
-			modifier = Modifier.fillMaxWidth(),
-			horizontalArrangement = Arrangement.SpaceBetween
-		) {
-			Text(text = "Less", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-			Text(text = "Original", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-			Text(text = "More", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-		}
-	}
+    Column {
+        Text(
+            text = "$emoji $label",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Slider(
+            value = level.toSliderValue(),
+            onValueChange = { slider -> onLevelChanged(slider.toFlavorLevel()) },
+            valueRange = 0f..1f
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Less",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Original",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "More",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable
 private fun IngredientQuantityRow(ingredient: ResolvedIngredient) {
-	val animatedQuantity by animateFloatAsState(
-		targetValue = ingredient.quantity.toFloat(),
-		label = "ingredient_${ingredient.globalIngredientId}"
-	)
+    val animatedQuantity by animateFloatAsState(
+        targetValue = ingredient.quantity.toFloat(),
+        label = "ingredient_${ingredient.globalIngredientId}"
+    )
 
-	Card(
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(bottom = 10.dp),
-		colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-		shape = RoundedCornerShape(14.dp)
-	) {
-		Row(
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(horizontal = 12.dp, vertical = 10.dp),
-			verticalAlignment = Alignment.CenterVertically,
-			horizontalArrangement = Arrangement.SpaceBetween
-		) {
-			Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-				AsyncImage(
-					model = ingredient.imageUrl,
-					contentDescription = ingredient.name,
-					modifier = Modifier
-						.size(42.dp)
-						.clip(RoundedCornerShape(10.dp)),
-					contentScale = ContentScale.Crop
-				)
-				Spacer(modifier = Modifier.width(10.dp))
-				Text(
-					text = ingredient.name,
-					style = MaterialTheme.typography.bodyLarge,
-					color = MaterialTheme.colorScheme.onSurface,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis
-				)
-			}
-			Spacer(modifier = Modifier.width(8.dp))
-			Text(
-				text = "${animatedQuantity.toOneDecimalString()} ${ingredient.unit}",
-				style = MaterialTheme.typography.bodyMedium,
-				fontWeight = FontWeight.SemiBold,
-				color = MaterialTheme.colorScheme.onSurface
-			)
-		}
-	}
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                AsyncImage(
+                    model = ingredient.imageUrl,
+                    contentDescription = ingredient.name,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = ingredient.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "${animatedQuantity.toOneDecimalString()} ${ingredient.unit}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
 }
 
 private fun Float.toOneDecimalString(): String = ((this * 10f).roundToInt() / 10f).toString()
@@ -567,16 +591,16 @@ private fun Float.toOneDecimalString(): String = ((this * 10f).roundToInt() / 10
 private fun Float.toSliderValue(): Float = ((this + 1f) / 2f).coerceIn(0f, 1f)
 
 private fun Float.toFlavorLevel(): Float {
-	val raw = (this * 2f) - 1f
-	return ((raw * 10f).roundToInt() / 10f).coerceIn(-1f, 1f)
+    val raw = (this * 2f) - 1f
+    return ((raw * 10f).roundToInt() / 10f).coerceIn(-1f, 1f)
 }
 
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun RecipeOverviewContentPreview() {
-	SousChefTheme {
-		RecipeOverviewContent(
+    SousChefTheme {
+        RecipeOverviewContent(
             uiState = RecipeOverviewUiState(
                 recipe = Recipe(
                     recipeId = "r1",
@@ -585,7 +609,7 @@ private fun RecipeOverviewContentPreview() {
                     baseServingSize = 2,
                     minServingSize = 1,
                     maxServingSize = 6,
-                    isVerifiedChefRecipe = true,
+                    isVerifiedChef = true,
                     ingredients = emptyList()
                 ),
                 selectedServings = 3,
@@ -620,8 +644,7 @@ private fun RecipeOverviewContentPreview() {
             onDeleteRecipe = {},
             onSweetnessLevelChanged = {}
         )
-	}
+    }
 }
-
 
 

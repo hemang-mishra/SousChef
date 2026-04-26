@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.ui.components.RecipeWithMeta
 import com.souschef.repository.recipe.RecipeRepository
+import com.souschef.ui.screens.profile.translateText
 import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel for the Home screen.
@@ -19,7 +21,8 @@ import kotlinx.coroutines.launch
 class HomeViewModel(
     private val recipeRepository: RecipeRepository,
     private val userId: String,
-    private val userName: String
+    private val userName: String,
+    private val preferredLanguageCode: String? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = userName))
@@ -34,23 +37,16 @@ class HomeViewModel(
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                recipeRepository.getRecipesByCreator(userId).collect { recipes ->
-                    // For each recipe, load step count
-                    val recipesWithMeta = recipes.map { recipe ->
-                        var stepCount = 0
-                        try {
-                            recipeRepository.getSteps(recipe.recipeId).collect { result ->
-                                if (result is Resource.Success) {
-                                    stepCount = result.data.size
-                                }
-                            }
-                        } catch (_: Exception) {
-                            // Non-fatal — show 0 steps
-                        }
+                // Fetch all recipes using the real-time listener
+                recipeRepository.getAllRecipes().collect { recipes ->
+                    // Filter down to only those with steps
+                    val recipesWithSteps = recipes.filter { it.hasSteps }
+                    
+                    val recipesWithMeta = recipesWithSteps.map { recipe ->
                         RecipeWithMeta(
                             recipe = recipe,
-                            stepCount = stepCount,
-                            hasSteps = stepCount > 0
+                            stepCount = recipe.stepCount,
+                            hasSteps = recipe.hasSteps
                         )
                     }
 
@@ -61,7 +57,13 @@ class HomeViewModel(
                             error = null
                         )
                     }
-                    applyFilters()
+                    
+                    // Trigger translation if language is set
+                    if (!preferredLanguageCode.isNullOrBlank()) {
+                        translateRecipes(preferredLanguageCode)
+                    } else {
+                        applyFilters()
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update {
@@ -88,7 +90,8 @@ class HomeViewModel(
         // Search filter
         if (state.searchQuery.isNotBlank()) {
             filtered = filtered.filter {
-                it.recipe.title.contains(state.searchQuery, ignoreCase = true)
+                val title = it.recipe.title
+                title.contains(state.searchQuery, ignoreCase = true)
             }
         }
 
@@ -100,5 +103,42 @@ class HomeViewModel(
         }
 
         _uiState.update { it.copy(filteredRecipes = filtered) }
+    }
+
+    private fun translateRecipes(langCode: String) {
+        viewModelScope.launch {
+            // Translate UI Strings
+            val greeting = translateText("Welcome back,", langCode) ?: "Welcome back,"
+            val searchPlaceholder = translateText("Search your recipes…", langCode) ?: "Search your recipes…"
+            val emptyTitle = translateText("No recipes yet", langCode) ?: "No recipes yet"
+            val emptySubtitle = translateText("Create your first recipe and let AI generate the cooking steps!", langCode) ?: "Create your first recipe and let AI generate the cooking steps!"
+
+            _uiState.update { state ->
+                state.copy(
+                    translatedGreeting = greeting,
+                    translatedSearchPlaceholder = searchPlaceholder,
+                    translatedEmptyTitle = emptyTitle,
+                    translatedEmptySubtitle = emptySubtitle
+                )
+            }
+
+            // Translate Recipes
+            val currentRecipes = _uiState.value.recipes
+            val translatedRecipes = currentRecipes.map { rwm ->
+                val translatedTitle = translateText(rwm.recipe.title, langCode) ?: rwm.recipe.title
+                
+                // Translate the description as well
+                val translatedDescription = translateText(rwm.recipe.description, langCode) ?: rwm.recipe.description
+
+                val translatedRecipe = rwm.recipe.copy(
+                    title = translatedTitle,
+                    description = translatedDescription
+                )
+                rwm.copy(recipe = translatedRecipe)
+            }
+            
+            _uiState.update { it.copy(recipes = translatedRecipes) }
+            applyFilters()
+        }
     }
 }

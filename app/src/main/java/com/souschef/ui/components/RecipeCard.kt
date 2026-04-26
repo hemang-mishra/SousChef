@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.souschef.model.recipe.Recipe
@@ -69,6 +73,7 @@ fun RecipeCard(
     modifier: Modifier = Modifier
 ) {
     val recipe = recipeWithMeta.recipe
+    val tags = recipe.tags.mapNotNull { RecipeTag.fromName(it) }.take(4)
 
     Card(
         modifier = modifier
@@ -80,127 +85,159 @@ fun RecipeCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.Top
+                .padding(14.dp)
         ) {
-            // ── Left: Image / Initials ───────────────────
-            RecipeImageBlock(
-                imageUrl = recipe.coverImageUrl,
-                title = recipe.title
-            )
-
-            Spacer(Modifier.width(14.dp))
-
-            // ── Right: Info ──────────────────────────────
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = recipe.title.ifBlank { "Untitled Recipe" },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AppColors.textPrimary(),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            // ── Top: Image + Info + Actions ──────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(),
+                verticalAlignment = Alignment.Top
+            ) {
+                // Left: Image / Initials
+                RecipeImageBlock(
+                    imageUrl = recipe.coverImageUrl,
+                    title = recipe.title
                 )
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.width(14.dp))
 
-                // Chef name + verified badge
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Center: Info
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = recipe.creatorName.ifBlank { "You" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppColors.textSecondary()
+                        text = recipe.title.ifBlank { "Untitled Recipe" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppColors.textPrimary(),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    if (recipe.isVerifiedChefRecipe) {
-                        Spacer(Modifier.width(6.dp))
-                        VerifiedChefBadge()
+
+                    Spacer(Modifier.height(2.dp))
+
+                    // Chef name + verified badge
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = recipe.creatorName.ifBlank { "You" },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppColors.textSecondary()
+                        )
+                        if (recipe.isVerifiedChef) {
+                            Spacer(Modifier.width(6.dp))
+                            VerifiedChefBadge()
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Metadata: servings + steps
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MetaChip(
+                            icon = Icons.Default.Group,
+                            text = "${recipe.baseServingSize} servings"
+                        )
+                        if (recipeWithMeta.hasSteps) {
+                            MetaChip(
+                                icon = Icons.Default.Restaurant,
+                                text = "${recipeWithMeta.stepCount} steps"
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(AppColors.warning().copy(alpha = 0.12f))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "No steps",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AppColors.warning()
+                                )
+                            }
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.width(4.dp))
 
-                // Metadata row: servings + steps
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Right: Action icons
+                Column(
+                    modifier = Modifier.fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    MetaChip(
-                        icon = Icons.Default.Group,
-                        text = "${recipe.baseServingSize} servings"
-                    )
-
-                    if (recipeWithMeta.hasSteps) {
-                        MetaChip(
-                            icon = Icons.Default.Restaurant,
-                            text = "${recipeWithMeta.stepCount} steps"
-                        )
-                    } else {
-                        // "No steps" warning
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(AppColors.warning().copy(alpha = 0.12f))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                    if (!recipeWithMeta.hasSteps && onGenerateSteps != null) {
+                        IconButton(
+                            onClick = onGenerateSteps,
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Text(
-                                text = "⚠️ No steps",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AppColors.warning()
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = "Generate Steps",
+                                tint = AppColors.gold(),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
+                    } else {
+                        Spacer(Modifier.size(36.dp))
                     }
-                }
 
-                Spacer(Modifier.height(8.dp))
-
-                // Tag chips
-                val tags = recipe.tags.mapNotNull { RecipeTag.fromName(it) }.take(3)
-                if (tags.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    IconButton(
+                        onClick = onClick,
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        tags.forEach { tag ->
-                            DietaryTag(text = tag.displayLabel, color = tag.color)
-                        }
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "View recipe",
+                            tint = AppColors.textTertiary(),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
 
-            // ── Right edge: Action icons ─────────────────
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // Generate steps button (show only if no steps)
-                if (!recipeWithMeta.hasSteps && onGenerateSteps != null) {
-                    IconButton(
-                        onClick = onGenerateSteps,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = "Generate Steps",
-                            tint = AppColors.gold(),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+            // ── Bottom: Tags row (below everything) ──────
+            if (tags.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
 
-                // View arrow
-                IconButton(
-                    onClick = onClick,
-                    modifier = Modifier.size(36.dp)
+                HorizontalDivider(
+                    color = AppColors.textTertiary().copy(alpha = 0.08f),
+                    thickness = 1.dp
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "View recipe",
-                        tint = AppColors.textTertiary(),
-                        modifier = Modifier.size(18.dp)
-                    )
+                    val visibleTags = tags.take(2)
+                    val overflowCount = tags.size - visibleTags.size
+
+                    visibleTags.forEach { tag ->
+                        DietaryTag(text = tag.displayLabel, color = tag.color)
+                    }
+
+                    if (overflowCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(AppColors.textTertiary().copy(alpha = 0.12f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "+$overflowCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AppColors.textTertiary()
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -286,7 +323,7 @@ private fun RecipeCardPreview() {
                         title = "Butter Chicken Masala",
                         creatorName = "Chef Hemang",
                         baseServingSize = 4,
-                        isVerifiedChefRecipe = true,
+                        isVerifiedChef = true,
                         tags = listOf("INDIAN", "SPICY")
                     ),
                     stepCount = 8,
