@@ -62,6 +62,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -172,9 +173,26 @@ fun CookingModeScreen(
             }
         },
         onLanguageChange = viewModel::setLanguage,
-        onToggleNarration = viewModel::toggleNarration,
-        onRetranslate = viewModel::retranslate
+        onToggleNarration = viewModel::toggleNarration
     )
+
+    // Listen for one-shot haptic events from the ViewModel and forward them
+    // to the platform Vibrator so the user gets tactile feedback on step
+    // transitions and timer completion.
+    val view = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(Unit) {
+        viewModel.hapticEvents.collect { event ->
+            when (event) {
+                HapticEvent.StepAdvanced -> view.performHapticFeedback(
+                    android.view.HapticFeedbackConstants.CONFIRM
+                )
+                HapticEvent.TimerFinished -> {
+                    com.souschef.util.Haptics.timerFinished(context)
+                    com.souschef.util.Beeper.timerFinished()
+                }
+            }
+        }
+    }
 }
 
 private data class DispenseData(val id: String, val name: String, val quantity: Double, val unit: String)
@@ -198,8 +216,7 @@ fun CookingModeScreenLayout(
     onResetTimer: () -> Unit,
     onDispense: (String, String, Double, String) -> Unit,
     onLanguageChange: (String) -> Unit = {},
-    onToggleNarration: () -> Unit = {},
-    onRetranslate: () -> Unit = {}
+    onToggleNarration: () -> Unit = {}
 ) {
     if (uiState.isLoading) {
         CookingModeShimmer()
@@ -268,19 +285,9 @@ fun CookingModeScreenLayout(
                             tint = AppColors.gold()
                         )
                     }
-                    // Retranslate (force) — only meaningful for non-English
-                    if (uiState.language != com.souschef.model.recipe.SupportedLanguages.ENGLISH) {
-                        IconButton(
-                            onClick = onRetranslate,
-                            enabled = !uiState.isTranslating
-                        ) {
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Outlined.Refresh,
-                                contentDescription = "Retranslate",
-                                tint = AppColors.gold()
-                            )
-                        }
-                    }
+                    // Translation progress is the only thing that surfaces
+                    // here now — retranslate has been moved to the recipe
+                    // overview overflow menu so cooking mode stays focused.
                     if (uiState.isTranslating) {
                         androidx.compose.material3.CircularProgressIndicator(
                             modifier = Modifier.size(20.dp).padding(end = 8.dp),

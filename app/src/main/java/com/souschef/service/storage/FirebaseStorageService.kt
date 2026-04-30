@@ -35,6 +35,25 @@ class FirebaseStorageService(
     }
 
     /**
+     * Uploads a global-ingredient image. Compresses to max 512px and JPEG 85%
+     * (ingredients render small so a smaller file is plenty).
+     *
+     * Storage path: `ingredients/{ingredientId}/image_{uuid}.jpg`.
+     *
+     * If [ingredientId] is blank (e.g. the user is uploading before the
+     * ingredient document has been created) the image is parked under
+     * `ingredients/_drafts/{uuid}.jpg` so the URL is still resolvable.
+     */
+    suspend fun uploadIngredientImage(ingredientId: String, imageUri: Uri): String {
+        val compressed = compressImage(imageUri, maxDimension = 512, quality = 85)
+        val fileName = "image_${UUID.randomUUID()}.jpg"
+        val folder = if (ingredientId.isBlank()) "ingredients/_drafts" else "ingredients/$ingredientId"
+        val ref = storageRef.child("$folder/$fileName")
+        ref.putBytes(compressed).await()
+        return ref.downloadUrl.await().toString()
+    }
+
+    /**
      * Uploads step media (image or video).
      * Images are compressed; videos are uploaded as-is.
      *

@@ -21,7 +21,9 @@ class UpdateGlobalIngredientUseCase(
         spiceIntensityValue: Double?,
         sweetnessValue: Double?,
         saltnessValue: Double?,
-        currentUserId: String
+        currentUserId: String,
+        imageUrl: String? = null,
+        clearImage: Boolean = false
     ): Flow<Resource<Unit>> = flow {
         emit(Resource.loading())
 
@@ -38,6 +40,10 @@ class UpdateGlobalIngredientUseCase(
                     spiceIntensityValue?.let { updates["spiceIntensityValue"] = it }
                     sweetnessValue?.let { updates["sweetnessValue"] = it }
                     saltnessValue?.let { updates["saltnessValue"] = it }
+                    when {
+                        clearImage -> updates["imageUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                        imageUrl != null && imageUrl.isNotBlank() -> updates["imageUrl"] = imageUrl
+                    }
 
                     ingredientRepository.updateIngredient(ingredientId, updates).collect { updateResult ->
                         emit(updateResult)

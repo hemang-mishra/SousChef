@@ -165,6 +165,9 @@ object AppStrings {
 
     // ── Recipe Overview — Menus & Dialogs ────────────────────────────────
 
+    fun retranslate(language: String): String =
+        if (language == SupportedLanguages.HINDI) "अनुवाद रीफ्रेश करें" else "Refresh translation"
+
     fun editRecipe(language: String): String =
         if (language == SupportedLanguages.HINDI) "रेसिपी संपादित करें" else "Edit Recipe"
 

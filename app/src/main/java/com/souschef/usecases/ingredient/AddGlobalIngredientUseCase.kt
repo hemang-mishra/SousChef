@@ -22,7 +22,8 @@ class AddGlobalIngredientUseCase(
         spiceIntensityValue: Double,
         sweetnessValue: Double,
         saltnessValue: Double,
-        currentUserId: String
+        currentUserId: String,
+        imageUrl: String? = null
     ): Flow<Resource<String>> = flow {
         emit(Resource.loading())
 
@@ -45,6 +46,7 @@ class AddGlobalIngredientUseCase(
                     // Create the ingredient
                     val ingredient = GlobalIngredient(
                         name = trimmedName,
+                        imageUrl = imageUrl?.takeIf { it.isNotBlank() },
                         defaultUnit = defaultUnit,
                         isDispensable = isDispensable,
                         spiceIntensityValue = spiceIntensityValue,

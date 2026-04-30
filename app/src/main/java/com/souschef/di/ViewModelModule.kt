@@ -70,7 +70,7 @@ val viewModelModule = module {
 
     // Add/Edit Ingredient — factory, needs currentUser + optional ingredientId
     factory { (currentUser: com.souschef.model.auth.UserProfile, ingredientId: String?) ->
-        AddEditIngredientViewModel(get(), get(), get(), currentUser, ingredientId)
+        AddEditIngredientViewModel(get(), get(), get(), get(), currentUser, ingredientId)
     }
 
     // ── Phase 5: Device ───────────────────────────────────────────────────────

@@ -11,6 +11,14 @@ data class DispenserUiState(
     val dispensableIngredients: List<GlobalIngredient> = emptyList(),
     /** Filtered view of [dispensableIngredients] based on [searchQuery]. */
     val filteredIngredients: List<GlobalIngredient> = emptyList(),
+    /**
+     * Latest globalIngredientId → imageUrl lookup for ALL ingredients in the
+     * library (not just dispensable ones). The compartment record stores a
+     * denormalised copy of the image URL at assignment time, so without this
+     * lookup the dispenser wouldn't pick up images added to ingredients
+     * later. The screen prefers this map over [Compartment.ingredientImageUrl].
+     */
+    val ingredientImageById: Map<String, String?> = emptyMap(),
     val searchQuery: String = "",
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,

@@ -35,26 +35,40 @@ class CookingSessionUseCase(
     fun nextStep(): Boolean {
         val next = _currentStepIndex.value + 1
         if (next >= steps.size) return false
-        cancelTimer()
-        _currentStepIndex.value = next
-        resetTimerForCurrentStep()
+        switchToStep(next)
         return true
     }
 
     fun previousStep(): Boolean {
         val prev = _currentStepIndex.value - 1
         if (prev < 0) return false
-        cancelTimer()
-        _currentStepIndex.value = prev
-        resetTimerForCurrentStep()
+        switchToStep(prev)
         return true
     }
 
     fun goToStep(index: Int) {
         if (index !in steps.indices) return
+        switchToStep(index)
+    }
+
+    /**
+     * Atomically swaps to a new step.
+     *
+     * Order matters: the timer's remaining millis is set BEFORE the step
+     * index is updated. That way any collector observing [currentStepIndex]
+     * (and synchronously calling [startTimer], like the cooking-mode
+     * ViewModel does) already sees the correct millis for the new step. The
+     * old order would leave a stale 0 ms in the timer flow at the moment
+     * the index emitted, which made `startTimer` no-op for steps that came
+     * after a step without a timer.
+     */
+    private fun switchToStep(index: Int) {
         cancelTimer()
+        val newStep = steps.getOrNull(index)
+        val seconds = newStep?.timerSeconds
+        _timerMillisRemaining.value =
+            if (seconds != null && seconds > 0) seconds * 1000L else 0L
         _currentStepIndex.value = index
-        resetTimerForCurrentStep()
     }
 
     // ── Timer ───────────────────────────────────────────────

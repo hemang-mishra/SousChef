@@ -154,7 +154,10 @@ fun RecipeOverviewContent(
 
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    val showOptions = uiState.currentUserId != null && uiState.currentUserId == recipe.creatorId
+    val isCreator = uiState.currentUserId != null && uiState.currentUserId == recipe.creatorId
+    val canRetranslate = uiState.language != com.souschef.model.recipe.SupportedLanguages.ENGLISH
+    // Show the overflow menu if there is at least one item to put inside it.
+    val showOverflowMenu = isCreator || canRetranslate
     val lang = uiState.language
 
     if (showDeleteDialog) {
@@ -197,18 +200,6 @@ fun RecipeOverviewContent(
                         onLanguageChange = onLanguageChange,
                         modifier = Modifier.padding(end = 6.dp)
                     )
-                    if (uiState.language != com.souschef.model.recipe.SupportedLanguages.ENGLISH) {
-                        IconButton(
-                            onClick = onRetranslate,
-                            enabled = !uiState.isTranslating
-                        ) {
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Outlined.Refresh,
-                                contentDescription = "Retranslate",
-                                tint = AppColors.gold()
-                            )
-                        }
-                    }
                     if (uiState.isTranslating) {
                         androidx.compose.material3.CircularProgressIndicator(
                             modifier = Modifier.size(20.dp).padding(end = 8.dp),
@@ -216,7 +207,7 @@ fun RecipeOverviewContent(
                             strokeWidth = 2.dp
                         )
                     }
-                    if (showOptions) {
+                    if (showOverflowMenu) {
                         IconButton(onClick = { showMenu = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "Options")
                         }
@@ -224,20 +215,39 @@ fun RecipeOverviewContent(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(AppStrings.editRecipe(lang)) },
-                                onClick = {
-                                    showMenu = false
-                                    onEditRecipe()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(AppStrings.deleteRecipe(lang), color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMenu = false
-                                    showDeleteDialog = true
-                                }
-                            )
+                            if (canRetranslate) {
+                                DropdownMenuItem(
+                                    text = { Text(AppStrings.retranslate(lang)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            androidx.compose.material.icons.Icons.Outlined.Refresh,
+                                            contentDescription = null,
+                                            tint = AppColors.gold()
+                                        )
+                                    },
+                                    enabled = !uiState.isTranslating,
+                                    onClick = {
+                                        showMenu = false
+                                        onRetranslate()
+                                    }
+                                )
+                            }
+                            if (isCreator) {
+                                DropdownMenuItem(
+                                    text = { Text(AppStrings.editRecipe(lang)) },
+                                    onClick = {
+                                        showMenu = false
+                                        onEditRecipe()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(AppStrings.deleteRecipe(lang), color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showMenu = false
+                                        showDeleteDialog = true
+                                    }
+                                )
+                            }
                         }
                     }
                 },

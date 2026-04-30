@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -61,8 +62,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -117,7 +121,7 @@ fun DispenserScreen(
         onDisconnect        = viewModel::onDisconnect,
         onAssignIngredient  = viewModel::onAssignIngredient,
         onClearCompartment  = viewModel::onClearCompartment,
-        onRefill            = viewModel::onRefill,
+        onRefill            = { id, qty -> viewModel.onRefill(id, qty) },
         onSearchQueryChange = viewModel::onSearchQueryChange,
         onNavigateToSettings = onNavigateToSettings,
         snackbarHostState   = snackbarHostState
@@ -134,13 +138,15 @@ fun DispenserScreenLayout(
     onDisconnect: () -> Unit,
     onAssignIngredient: (Int, GlobalIngredient) -> Unit,
     onClearCompartment: (Int) -> Unit,
-    onRefill: (Int) -> Unit,
+    onRefill: (Int, Double?) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
     // Which compartment's assignment sheet is open?
     var assigningCompartmentId by remember { mutableStateOf<Int?>(null) }
+    // Which compartment's refill sheet is open?
+    var refillingCompartmentId by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -174,6 +180,10 @@ fun DispenserScreenLayout(
             }
         }
     ) { padding ->
+        val assignedCount = uiState.compartments.count { !it.isEmpty }
+        val lowStockCount = uiState.compartments.count { it.isLowStock }
+        val emptyCount = uiState.compartments.count { it.isEmpty }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -182,23 +192,45 @@ fun DispenserScreenLayout(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // BLE status card
+            // BLE hero card
             item {
                 BleStatusCard(
                     connectionState = uiState.connectionState,
                     onScanConnect   = onScanConnect,
                     onDisconnect    = onDisconnect
                 )
-                Spacer(Modifier.height(8.dp))
+            }
+
+            // At-a-glance stats: assigned / low-stock / empty
+            item {
+                StatsRow(
+                    assignedCount = assignedCount,
+                    totalCount    = uiState.compartments.size,
+                    lowStockCount = lowStockCount,
+                    emptyCount    = emptyCount
+                )
+            }
+
+            item {
+                Text(
+                    text = "Compartments",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AppColors.textPrimary(),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                )
             }
 
             // Compartment cards
             items(uiState.compartments, key = { it.compartmentId }) { compartment ->
                 CompartmentCard(
                     compartment = compartment,
+                    liveImageUrl = compartment.globalIngredientId
+                        ?.let { uiState.ingredientImageById[it] }
+                        ?: compartment.ingredientImageUrl,
                     onAssign    = { assigningCompartmentId = compartment.compartmentId },
                     onClear     = { onClearCompartment(compartment.compartmentId) },
-                    onRefill    = { onRefill(compartment.compartmentId) }
+                    onRefill    = { refillingCompartmentId = compartment.compartmentId }
                 )
             }
 
@@ -226,6 +258,35 @@ fun DispenserScreenLayout(
             )
         }
     }
+
+    // Refill bottom sheet
+    if (refillingCompartmentId != null) {
+        val refillSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val targetCompartment = uiState.compartments
+            .firstOrNull { it.compartmentId == refillingCompartmentId }
+        if (targetCompartment != null) {
+            ModalBottomSheet(
+                onDismissRequest = { refillingCompartmentId = null },
+                sheetState = refillSheetState,
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                RefillCompartmentContent(
+                    compartment = targetCompartment,
+                    liveImageUrl = targetCompartment.globalIngredientId
+                        ?.let { uiState.ingredientImageById[it] }
+                        ?: targetCompartment.ingredientImageUrl,
+                    onConfirm = { quantityTsp ->
+                        onRefill(targetCompartment.compartmentId, quantityTsp)
+                        refillingCompartmentId = null
+                    },
+                    onDismiss = { refillingCompartmentId = null }
+                )
+            }
+        } else {
+            // Compartment vanished while sheet was open — bail out cleanly.
+            refillingCompartmentId = null
+        }
+    }
 }
 
 // ── BLE Status Card ───────────────────────────────────────────────────────────
@@ -239,6 +300,7 @@ private fun BleStatusCard(
     val isConnected = connectionState is BleConnectionState.Connected
     val isScanning  = connectionState is BleConnectionState.Scanning ||
             connectionState is BleConnectionState.Connecting
+    val isError     = connectionState is BleConnectionState.Error
 
     val dotColor by animateColorAsState(
         targetValue = when (connectionState) {
@@ -259,55 +321,159 @@ private fun BleStatusCard(
         else                             -> "Disconnected"
     }
 
-    Row(
+    val hint = when (connectionState) {
+        is BleConnectionState.Connected -> "Tap a compartment to refill or reassign."
+        is BleConnectionState.Scanning,
+        is BleConnectionState.Connecting -> "Make sure the dispenser is powered on and nearby."
+        is BleConnectionState.Error -> "Tap Connect to retry."
+        else -> "Pair with your SousChef Dispenser to start cooking."
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, AppColors.border(), RoundedCornerShape(12.dp))
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(dotColor)
-        )
-        Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "SousChef Dispenser",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = AppColors.textPrimary()
-            )
-            Text(
-                text = statusLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = AppColors.textSecondary()
-            )
-        }
-        if (isConnected) {
-            TextButton(onClick = onDisconnect) {
-                Text("Disconnect", color = AppColors.textSecondary())
-            }
-        } else {
-            Button(
-                onClick = onScanConnect,
-                enabled = !isScanning,
-                colors  = ButtonDefaults.buttonColors(containerColor = AppColors.gold()),
-                shape   = RoundedCornerShape(8.dp)
-            ) {
-                Icon(
-                    Icons.Default.BluetoothSearching,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = if (isConnected) listOf(
+                        AppColors.gold().copy(alpha = 0.20f),
+                        AppColors.gold().copy(alpha = 0.06f)
+                    ) else listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.surface
+                    )
                 )
-                Spacer(Modifier.width(6.dp))
-                Text(if (isScanning) "Scanning…" else "Connect")
+            )
+            .border(
+                width = 1.dp,
+                color = if (isConnected) AppColors.gold().copy(alpha = 0.5f)
+                        else if (isError) Color(0xFFE53935).copy(alpha = 0.4f)
+                        else AppColors.border(),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(horizontal = 18.dp, vertical = 16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Animated status dot inside a soft halo so it reads at a glance.
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(dotColor.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(dotColor)
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "SousChef Dispenser",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AppColors.textPrimary()
+                )
+                Text(
+                    text = statusLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isError) Color(0xFFE53935) else AppColors.textSecondary()
+                )
+            }
+            if (isConnected) {
+                TextButton(onClick = onDisconnect) {
+                    Text("Disconnect", color = AppColors.textSecondary())
+                }
+            } else {
+                Button(
+                    onClick = onScanConnect,
+                    enabled = !isScanning,
+                    colors  = ButtonDefaults.buttonColors(containerColor = AppColors.gold()),
+                    shape   = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Icon(
+                        Icons.Default.BluetoothSearching,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (isScanning) "Scanning…" else "Connect")
+                }
             }
         }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = hint,
+            style = MaterialTheme.typography.bodySmall,
+            color = AppColors.textTertiary()
+        )
+    }
+}
+
+// ── Stats Row ─────────────────────────────────────────────────────────────────
+
+@Composable
+private fun StatsRow(
+    assignedCount: Int,
+    totalCount: Int,
+    lowStockCount: Int,
+    emptyCount: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        StatTile(
+            value = "$assignedCount/$totalCount",
+            label = "Assigned",
+            accent = AppColors.gold(),
+            modifier = Modifier.weight(1f)
+        )
+        StatTile(
+            value = lowStockCount.toString(),
+            label = "Low stock",
+            accent = if (lowStockCount > 0) Color(0xFFFFA000) else AppColors.textTertiary(),
+            modifier = Modifier.weight(1f)
+        )
+        StatTile(
+            value = emptyCount.toString(),
+            label = "Empty",
+            accent = if (emptyCount > 0) AppColors.textSecondary() else AppColors.textTertiary(),
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun StatTile(
+    value: String,
+    label: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(0.5.dp, AppColors.border(), RoundedCornerShape(14.dp))
+            .padding(vertical = 12.dp, horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = accent
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = AppColors.textTertiary()
+        )
     }
 }
 
@@ -316,6 +482,7 @@ private fun BleStatusCard(
 @Composable
 private fun CompartmentCard(
     compartment: Compartment,
+    liveImageUrl: String?,
     onAssign: () -> Unit,
     onClear: () -> Unit,
     onRefill: () -> Unit
@@ -325,12 +492,12 @@ private fun CompartmentCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surface)
             .border(
                 width = if (compartment.isLowStock) 1.5.dp else 0.5.dp,
                 color = if (compartment.isLowStock) Color(0xFFFFA000) else AppColors.border(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(18.dp)
             )
             .padding(16.dp)
     ) {
@@ -412,39 +579,18 @@ private fun CompartmentCard(
         } else {
             // Ingredient info row
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (!compartment.ingredientImageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model              = compartment.ingredientImageUrl,
-                        contentDescription = compartment.ingredientName,
-                        modifier           = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape),
-                        contentScale       = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(AppColors.gold().copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Outlined.Science,
-                            contentDescription = null,
-                            tint     = AppColors.gold(),
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
+                IngredientThumbnail(
+                    imageUrl = liveImageUrl,
+                    contentDescription = compartment.ingredientName
+                )
 
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(14.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text     = compartment.ingredientName ?: "—",
-                        style    = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
+                        style    = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color    = AppColors.textPrimary(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -455,6 +601,12 @@ private fun CompartmentCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = if (compartment.isLowStock) Color(0xFFFFA000)
                                     else AppColors.textSecondary()
+                        )
+                    } else {
+                        Text(
+                            text = "Capacity not set",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppColors.textTertiary()
                         )
                     }
                 }
@@ -583,39 +735,257 @@ fun AssignCompartmentContent(
     }
 }
 
+// ── Refill Bottom Sheet ───────────────────────────────────────────────────────
+
+/**
+ * Bottom sheet for recording a physical refill of a compartment.
+ *
+ * The user can either:
+ * - Tap a quick preset (2, 4, 6, 8, 10 tsp) — covers the typical store-bought
+ *   spice jar sizes.
+ * - Tap "Custom amount" to type an exact tsp value.
+ *
+ * On confirm we hand the chosen tsp value back to the ViewModel which both
+ * resets `dispensedCounts` to 0 AND overwrites `totalCapacityTsp` with the
+ * supplied amount, so the on-card progress bar snaps to a fresh full
+ * compartment of exactly that size.
+ */
+@Composable
+private fun RefillCompartmentContent(
+    compartment: Compartment,
+    liveImageUrl: String?,
+    onConfirm: (Double) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Preset tsp values cover most common single-jar refill sizes.
+    val presets = listOf(2.0, 4.0, 6.0, 8.0, 10.0)
+
+    // Sensible default: whatever was previously configured, falling back to
+    // the first preset for an uninitialised compartment.
+    val initialPreset = presets.firstOrNull { it == compartment.totalCapacityTsp }
+    var selectedPreset by remember(compartment.compartmentId) { mutableStateOf(initialPreset) }
+    var customMode by remember(compartment.compartmentId) {
+        mutableStateOf(initialPreset == null && compartment.totalCapacityTsp > 0.0)
+    }
+    var customText by remember(compartment.compartmentId) {
+        mutableStateOf(
+            if (compartment.totalCapacityTsp > 0.0 && initialPreset == null)
+                "%.1f".format(compartment.totalCapacityTsp)
+            else ""
+        )
+    }
+
+    val customValueTsp = customText.replace(',', '.').toDoubleOrNull()
+    val chosenAmount: Double? = when {
+        customMode -> customValueTsp?.takeIf { it > 0.0 }
+        else -> selectedPreset
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 24.dp)
+    ) {
+        // Header row with thumbnail
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IngredientThumbnail(
+                imageUrl = liveImageUrl,
+                contentDescription = compartment.ingredientName,
+                size = 48.dp
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Refill Compartment ${compartment.compartmentId}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AppColors.textPrimary()
+                )
+                Text(
+                    text = compartment.ingredientName ?: "Unassigned",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.textSecondary(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            text = "How much did you pour in?",
+            style = MaterialTheme.typography.bodyMedium,
+            color = AppColors.textPrimary(),
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = "1 tsp ≈ 5 ml. Pick the closest amount or enter a custom value.",
+            style = MaterialTheme.typography.bodySmall,
+            color = AppColors.textTertiary()
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        // Preset chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            presets.forEach { preset ->
+                val isSelected = !customMode && selectedPreset == preset
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isSelected) AppColors.gold().copy(alpha = 0.18f)
+                            else MaterialTheme.colorScheme.surface
+                        )
+                        .border(
+                            width = if (isSelected) 1.5.dp else 0.5.dp,
+                            color = if (isSelected) AppColors.gold() else AppColors.border(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable {
+                            customMode = false
+                            selectedPreset = preset
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${preset.toInt()} tsp",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) AppColors.gold() else AppColors.textPrimary()
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Custom amount toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (customMode) AppColors.gold().copy(alpha = 0.10f)
+                    else MaterialTheme.colorScheme.surface
+                )
+                .border(
+                    width = if (customMode) 1.5.dp else 0.5.dp,
+                    color = if (customMode) AppColors.gold() else AppColors.border(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .clickable { customMode = true }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Custom amount (tsp)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppColors.textPrimary(),
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = customText,
+                onValueChange = { raw ->
+                    // Only allow digits + a single decimal separator. Keeps
+                    // the field tidy on phones that don't honour
+                    // KeyboardType.Decimal strictly.
+                    val sanitized = raw.filter { it.isDigit() || it == '.' || it == ',' }
+                    customText = sanitized
+                    customMode = true
+                },
+                placeholder = { Text("e.g. 5.5") },
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = AppColors.gold(),
+                    unfocusedBorderColor = AppColors.border()
+                ),
+                modifier = Modifier
+                    .widthIn(min = 100.dp)
+                    .width(120.dp)
+            )
+        }
+
+        if (customMode && customText.isNotBlank() && customValueTsp == null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Enter a positive number, e.g. 5 or 5.5",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFE53935)
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Action buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Cancel", color = AppColors.textSecondary())
+            }
+            Button(
+                onClick = { chosenAmount?.let(onConfirm) },
+                enabled = chosenAmount != null,
+                colors = ButtonDefaults.buttonColors(containerColor = AppColors.gold()),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1.4f),
+                contentPadding = PaddingValues(vertical = 12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = chosenAmount?.let { "Mark refilled • %.1f tsp".format(it) }
+                        ?: "Mark refilled",
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun IngredientPickerRow(ingredient: GlobalIngredient, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .border(0.5.dp, AppColors.border(), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (!ingredient.imageUrl.isNullOrBlank()) {
-            AsyncImage(
-                model              = ingredient.imageUrl,
-                contentDescription = ingredient.name,
-                modifier           = Modifier.size(40.dp).clip(CircleShape),
-                contentScale       = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape)
-                    .background(AppColors.gold().copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Outlined.Science, null, tint = AppColors.gold(), modifier = Modifier.size(20.dp))
-            }
-        }
+        IngredientThumbnail(
+            imageUrl = ingredient.imageUrl,
+            contentDescription = ingredient.name,
+            size = 48.dp
+        )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text   = ingredient.name,
                 style  = MaterialTheme.typography.bodyLarge,
                 color  = AppColors.textPrimary(),
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text  = ingredient.defaultUnit,
@@ -623,7 +993,48 @@ private fun IngredientPickerRow(ingredient: GlobalIngredient, onClick: () -> Uni
                 color = AppColors.textTertiary()
             )
         }
-        Icon(Icons.Default.Check, contentDescription = null, tint = AppColors.gold().copy(alpha = 0f))
+        Icon(
+            Icons.Default.Check,
+            contentDescription = null,
+            tint = AppColors.gold().copy(alpha = 0f)
+        )
+    }
+}
+
+/**
+ * Reusable ingredient image bubble. Falls back to a gold-tinted Science
+ * icon when no remote image is available so the layout doesn't shift
+ * between assigned slots.
+ */
+@Composable
+private fun IngredientThumbnail(
+    imageUrl: String?,
+    contentDescription: String?,
+    size: androidx.compose.ui.unit.Dp = 56.dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(14.dp))
+            .background(AppColors.gold().copy(alpha = 0.10f))
+            .border(0.5.dp, AppColors.gold().copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = contentDescription,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                Icons.Outlined.Science,
+                contentDescription = null,
+                tint = AppColors.gold(),
+                modifier = Modifier.size(size * 0.45f)
+            )
+        }
     }
 }
 
@@ -649,7 +1060,7 @@ private fun DispenserScreenPreview() {
             onDisconnect        = {},
             onAssignIngredient  = { _, _ -> },
             onClearCompartment  = {},
-            onRefill            = {},
+            onRefill            = { _, _ -> },
             onSearchQueryChange = {},
             onNavigateToSettings = {},
             snackbarHostState   = remember { SnackbarHostState() }
