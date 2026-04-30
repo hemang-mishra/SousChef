@@ -87,6 +87,7 @@ import coil.compose.AsyncImage
 import com.souschef.model.recipe.RecipeStep
 import com.souschef.model.recipe.ResolvedIngredient
 import com.souschef.permissions.BlePermissionHelper
+import com.souschef.util.AppStrings
 import com.souschef.ui.components.CookingModeShimmer
 import com.souschef.ui.components.GlassCard
 import com.souschef.ui.components.PremiumButton
@@ -143,7 +144,8 @@ fun CookingModeScreen(
     if (uiState.isFinished) {
         CookingCompleteScreen(
             onBackToRecipe = onFinished,
-            onShare = { /* Phase 7+ */ }
+            onShare = { /* Phase 7+ */ },
+            language = uiState.language
         )
         return
     }
@@ -223,12 +225,8 @@ fun CookingModeScreenLayout(
     val currentStep = uiState.steps.getOrNull(uiState.currentStepIndex) ?: return
     val isLastStep = uiState.currentStepIndex >= uiState.steps.size - 1
     val isFirstStep = uiState.currentStepIndex == 0
-    val isHindi = uiState.language == com.souschef.model.recipe.SupportedLanguages.HINDI
-    val stepHeader = if (isHindi) {
-        "चरण ${uiState.currentStepIndex + 1} / ${uiState.steps.size}"
-    } else {
-        "Step ${uiState.currentStepIndex + 1} of ${uiState.steps.size}"
-    }
+    val lang = uiState.language
+    val stepHeader = AppStrings.step(lang, uiState.currentStepIndex + 1, uiState.steps.size)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -257,13 +255,16 @@ fun CookingModeScreenLayout(
                         onLanguageChange = onLanguageChange,
                         modifier = Modifier.padding(end = 6.dp)
                     )
+                    // Narration auto-plays when entering each step. This button
+                    // acts as Stop while speaking, and as Replay when idle so
+                    // the user can hear the current step again hands-free.
                     IconButton(onClick = onToggleNarration) {
                         Icon(
                             imageVector = if (uiState.isSpeaking)
                                 androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeOff
                             else
                                 androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = if (uiState.isSpeaking) "Stop narration" else "Narrate step",
+                            contentDescription = if (uiState.isSpeaking) "Stop narration" else "Replay narration",
                             tint = AppColors.gold()
                         )
                     }
@@ -303,18 +304,13 @@ fun CookingModeScreenLayout(
                 ) {
                     if (!isFirstStep) {
                         PremiumOutlinedButton(
-                            text = if (isHindi) "← पिछला" else "← Previous",
+                            text = AppStrings.previousStep(lang),
                             onClick = onPreviousStep,
                             modifier = Modifier.weight(1f)
                         )
                     }
                     PremiumButton(
-                        text = when {
-                            isLastStep && isHindi -> "पकाना पूरा 🎉"
-                            isLastStep -> "Finish Cooking 🎉"
-                            isHindi -> "अगला चरण →"
-                            else -> "Next Step →"
-                        },
+                        text = if (isLastStep) AppStrings.finishCooking(lang) else AppStrings.nextStep(lang),
                         onClick = onNextStep,
                         modifier = Modifier.weight(1f)
                     )
@@ -537,6 +533,7 @@ private fun StepContent(
                 timerMillisRemaining = timerMillisRemaining,
                 isTimerRunning = isTimerRunning,
                 timerFinished = timerFinished,
+                language = language,
                 onStart = onStartTimer,
                 onPause = onPauseTimer,
                 onReset = onResetTimer
@@ -620,7 +617,7 @@ private fun VisualCueRow(
     cue: String,
     language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH
 ) {
-    val prefix = if (language == com.souschef.model.recipe.SupportedLanguages.HINDI) "देखें: " else "Look for: "
+    val prefix = AppStrings.lookFor(language)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = "👁 ",
@@ -772,10 +769,9 @@ private fun StepIngredientCard(
     language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH,
     onDispense: () -> Unit
 ) {
-    val isHindi = language == com.souschef.model.recipe.SupportedLanguages.HINDI
     GlassCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            PremiumSectionHeader(title = if (isHindi) "सामग्री" else "Ingredient")
+            PremiumSectionHeader(title = AppStrings.ingredient(language))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -841,7 +837,7 @@ private fun StepIngredientCard(
                         } else {
                             if (!isLoaded) {
                                 Text(
-                                    text = if (isHindi) "लोड नहीं" else "Not Loaded",
+                                    text = AppStrings.notLoaded(language),
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             } else {
@@ -852,7 +848,7 @@ private fun StepIngredientCard(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isHindi) "डिस्पेंस" else "Dispense",
+                                    text = AppStrings.dispense(language),
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }
@@ -873,6 +869,7 @@ private fun TimerSection(
     timerMillisRemaining: Long,
     isTimerRunning: Boolean,
     timerFinished: Boolean,
+    language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onReset: () -> Unit
@@ -884,7 +881,7 @@ private fun TimerSection(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Timer",
+                text = AppStrings.timer(language),
                 style = MaterialTheme.typography.titleMedium,
                 color = AppColors.textSecondary()
             )
@@ -922,7 +919,7 @@ private fun TimerSection(
 
             if (timerFinished) {
                 Text(
-                    text = "⏰ Time's up!",
+                    text = AppStrings.timesUp(language),
                     style = MaterialTheme.typography.titleMedium,
                     color = AppColors.success(),
                     fontWeight = FontWeight.SemiBold
@@ -938,7 +935,7 @@ private fun TimerSection(
                     // Start / Pause
                     TimerControlButton(
                         icon = if (isTimerRunning) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                        label = if (isTimerRunning) "Pause" else "Start",
+                        label = if (isTimerRunning) AppStrings.timerPause(language) else AppStrings.timerStart(language),
                         isPrimary = true,
                         onClick = if (isTimerRunning) onPause else onStart
                     )
@@ -947,7 +944,7 @@ private fun TimerSection(
                 // Reset
                 TimerControlButton(
                     icon = Icons.Outlined.Refresh,
-                    label = "Reset",
+                    label = AppStrings.timerReset(language),
                     isPrimary = false,
                     onClick = onReset
                 )
@@ -1001,7 +998,8 @@ private fun TimerControlButton(
 @Composable
 fun CookingCompleteScreen(
     onBackToRecipe: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH
 ) {
     Box(
         modifier = Modifier
@@ -1050,7 +1048,7 @@ fun CookingCompleteScreen(
             }
 
             Text(
-                text = "Great work! 🎉",
+                text = AppStrings.greatWork(language),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -1058,7 +1056,7 @@ fun CookingCompleteScreen(
             )
 
             Text(
-                text = "Your dish is ready to be enjoyed. Bon appétit!",
+                text = AppStrings.dishReady(language),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center
@@ -1067,13 +1065,13 @@ fun CookingCompleteScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             PremiumButton(
-                text = "Back to Recipe",
+                text = AppStrings.backToRecipe(language),
                 onClick = onBackToRecipe,
                 modifier = Modifier.fillMaxWidth(0.8f)
             )
 
             PremiumOutlinedButton(
-                text = "Share Recipe",
+                text = AppStrings.shareRecipe(language),
                 onClick = onShare,
                 modifier = Modifier.fillMaxWidth(0.8f)
             )

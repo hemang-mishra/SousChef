@@ -1,3 +1,14 @@
 <resources>
     <string name="app_name">SousChef</string>
+
+    <!-- Content descriptions (system-locale driven, not in-app language) -->
+    <string name="cd_back">Back</string>
+    <string name="cd_exit_cooking">Exit cooking mode</string>
+    <string name="cd_narrate_step">Narrate step</string>
+    <string name="cd_stop_narration">Stop narration</string>
+    <string name="cd_retranslate">Retranslate</string>
+    <string name="cd_options_menu">Options</string>
+    <string name="cd_auto_dispense">Auto-dispense</string>
+    <string name="cd_complete">Complete</string>
+    <string name="cd_play_video">Play video</string>
 </resources>

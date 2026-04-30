@@ -20,6 +20,8 @@ class GeminiTranslationRepository(
         try {
             val result = service.translate(source, targetLanguageCode)
             emit(Resource.success(result))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Resource.failure(message = e.message ?: "Translation failed. Please try again."))
         }
