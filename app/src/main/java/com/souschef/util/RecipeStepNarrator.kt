@@ -6,68 +6,92 @@ import com.souschef.model.recipe.SupportedLanguages
 import kotlin.math.roundToInt
 
 /**
- * Builds a detailed, multi-sentence narration for a single cooking step.
+ * Builds a flowing, conversational narration for a single cooking step.
  *
- * Goes well beyond just reading the instruction text: it weaves in the step
- * number, the ingredient + quantity, flame level, timer, and any visual cue
- * so the user can keep their hands on the pan and their eyes off the screen.
+ * The output is meant to feel like a friendly cook talking the user through
+ * the step rather than a bulleted list of facts. Sentences are stitched
+ * together with natural connectors ("now", "ab", "phir", "and", "after that")
+ * so a Text-to-Speech engine reads them as one breathing paragraph.
  *
- * All template strings are localized for English and Hindi. The narrator
- * picks the localized field on each model (with English fallback) so the
- * output is always linguistically consistent with [language].
+ * The narrator is intentionally Hinglish-friendly for the Hindi locale —
+ * everyday cooking words like "step", "minute", "second", "garlic" are kept
+ * in English, while the connective tissue is in Hindi (Devanagari). This is
+ * how most home cooks actually speak.
  */
 object RecipeStepNarrator {
 
     /**
      * @param step           The step to narrate.
      * @param stepIndex      0-based index (used for "Step N").
-     * @param totalSteps     Kept for API compatibility — not spoken (users
-     *                       found "of N" distracting while cooking).
+     * @param totalSteps     Kept for API compatibility — not spoken.
      * @param ingredient     Resolved ingredient used in this step (may be null).
      * @param language       Active language code ("en" / "hi").
+     * @param autoTimerStarted If true, append a sentence telling the user the
+     *                         timer has started automatically. The user does
+     *                         not need to press anything — they can pause it
+     *                         from the screen.
      */
     fun build(
         step: RecipeStep,
         stepIndex: Int,
         @Suppress("UNUSED_PARAMETER") totalSteps: Int,
         ingredient: ResolvedIngredient?,
-        language: String
+        language: String,
+        autoTimerStarted: Boolean = false
     ): String {
-        val parts = mutableListOf<String>()
+        val sb = StringBuilder()
 
-        parts += stepHeader(stepIndex + 1, language)
-        parts += step.instructionIn(language).ensureSentenceEnd()
+        sb.append(stepHeader(stepIndex + 1, language)).append(' ')
+
+        // Lead-in connector ("Now, ..." / "Toh ab, ...") so the instruction
+        // sentence flows out of the step header without a hard stop.
+        sb.append(leadIn(language)).append(' ')
+        sb.append(step.instructionIn(language).trim().stripTrailingPunct()).append('.')
 
         if (ingredient != null) {
-            parts += ingredientLine(
+            sb.append(' ').append(ingredientLine(
                 quantity = ingredient.quantity,
                 unit = ingredient.unitIn(language),
                 name = ingredient.nameIn(language),
                 language = language
-            )
+            ))
         }
 
         step.flameLevelIn(language)?.takeIf { it.isNotBlank() }?.let { flame ->
-            parts += flameLine(flame, language)
+            sb.append(' ').append(flameLine(flame, language))
         }
 
         step.timerSeconds?.takeIf { it > 0 }?.let { secs ->
-            parts += timerLine(secs, language)
+            sb.append(' ').append(timerLine(secs, language, autoStarted = autoTimerStarted))
         }
 
         step.expectedVisualCueIn(language)?.takeIf { it.isNotBlank() }?.let { cue ->
-            parts += visualCueLine(cue, language)
+            sb.append(' ').append(visualCueLine(cue, language))
         }
 
-        return parts.joinToString(separator = " ")
+        return sb.toString().trim()
     }
+
+    /**
+     * Short utterance spoken when a timer auto-starts on step entry.
+     * Used when the screen wants to announce only the timer (e.g. on a
+     * step the user re-visited, where re-narration is suppressed).
+     */
+    fun timerStartedAnnouncement(seconds: Int, language: String): String =
+        timerStartedSentence(seconds, language)
 
     // ── Localized templates ─────────────────────────────────────────────────
 
     private fun stepHeader(current: Int, language: String): String =
         when (language) {
-            SupportedLanguages.HINDI -> "चरण $current।"
+            SupportedLanguages.HINDI -> "Step $current."
             else -> "Step $current."
+        }
+
+    private fun leadIn(language: String): String =
+        when (language) {
+            SupportedLanguages.HINDI -> "Toh ab,"
+            else -> "Alright, now"
         }
 
     private fun ingredientLine(
@@ -78,45 +102,81 @@ object RecipeStepNarrator {
     ): String {
         val q = quantity.toFriendlyString()
         return when (language) {
-            SupportedLanguages.HINDI -> "$q $unit $name डालें।"
-            else -> "Use $q $unit of $name."
+            SupportedLanguages.HINDI -> "Iske liye aapko chahiye $q $unit $name — bas itna hi."
+            else -> "For this you'll want about $q $unit of $name — that's all you need."
         }
     }
 
-    private fun flameLine(flameLevel: String, language: String): String =
-        when (language) {
-            SupportedLanguages.HINDI -> "आँच $flameLevel रखें।"
-            else -> "Set the flame to $flameLevel."
+    private fun flameLine(flameLevel: String, language: String): String {
+        val level = flameLevel.trim().lowercase()
+        return when (language) {
+            SupportedLanguages.HINDI -> when (level) {
+                "low", "dheemi", "धीमी", "धीमी आँच" -> "Aanch dheemi rakhiyega, jaldi nahi karni."
+                "medium", "madhyam", "मध्यम" -> "Aanch medium rakhiye, na zyada tez na bahut dheemi."
+                "high", "tez", "तेज़", "तेज" -> "Aanch tez kar dijiye, hum thodi heat chahte hain."
+                else -> "Aanch ko $flameLevel par rakhiye."
+            }
+            else -> when (level) {
+                "low" -> "Keep the flame low — we're not in a rush here."
+                "medium" -> "Keep the flame on medium, nothing too aggressive."
+                "high" -> "Crank the flame up high, we want some real heat."
+                else -> "Set the flame to $flameLevel."
+            }
+        }
+    }
+
+    private fun timerLine(seconds: Int, language: String, autoStarted: Boolean): String =
+        if (autoStarted) {
+            timerStartedSentence(seconds, language)
+        } else {
+            val duration = formatDuration(seconds, language)
+            when (language) {
+                SupportedLanguages.HINDI -> "Ise $duration ke liye pakaiye, dhyaan se."
+                else -> "Let it cook for $duration, take your time."
+            }
         }
 
-    private fun timerLine(seconds: Int, language: String): String {
+    private fun timerStartedSentence(seconds: Int, language: String): String {
+        val duration = formatDuration(seconds, language)
+        return when (language) {
+            SupportedLanguages.HINDI ->
+                "Maine $duration ka timer shuru kar diya hai — aap chahein toh screen se pause kar sakte hain."
+            else ->
+                "I've started a $duration timer for you — you can pause it from the screen any time."
+        }
+    }
+
+    private fun visualCueLine(cue: String, language: String): String {
+        val cleaned = cue.trim().stripTrailingPunct()
+        return when (language) {
+            SupportedLanguages.HINDI -> "Aur haan, dhyaan rakhiyega — $cleaned."
+            else -> "And keep an eye out — $cleaned."
+        }
+    }
+
+    private fun formatDuration(seconds: Int, language: String): String {
         val mins = seconds / 60
         val secs = seconds % 60
         return when (language) {
             SupportedLanguages.HINDI -> when {
-                mins == 0 -> "$secs सेकंड के लिए पकाएँ।"
-                secs == 0 -> "$mins मिनट के लिए पकाएँ।"
-                else -> "$mins मिनट $secs सेकंड के लिए पकाएँ।"
+                mins == 0 -> "$secs second"
+                secs == 0 -> if (mins == 1) "ek minute" else "$mins minute"
+                else -> {
+                    val mPart = if (mins == 1) "ek minute" else "$mins minute"
+                    "$mPart aur $secs second"
+                }
             }
             else -> when {
-                mins == 0 -> "Cook for $secs seconds."
-                secs == 0 -> "Cook for $mins ${if (mins == 1) "minute" else "minutes"}."
-                else -> "Cook for $mins ${if (mins == 1) "minute" else "minutes"} and $secs seconds."
+                mins == 0 -> "$secs ${if (secs == 1) "second" else "seconds"}"
+                secs == 0 -> "$mins ${if (mins == 1) "minute" else "minutes"}"
+                else -> "$mins ${if (mins == 1) "minute" else "minutes"} and $secs ${if (secs == 1) "second" else "seconds"}"
             }
         }
     }
 
-    private fun visualCueLine(cue: String, language: String): String =
-        when (language) {
-            SupportedLanguages.HINDI -> "देखें: $cue।"
-            else -> "Look for: ${cue.trimEnd('.', '!', '?')}."
-        }
-
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private fun Double.toFriendlyString(): String {
-        // Show whole numbers without trailing ".0" but keep one decimal
-        // for fractional amounts like 1.5.
         val rounded = (this * 10).roundToInt() / 10.0
         return if (rounded == rounded.toLong().toDouble()) {
             rounded.toLong().toString()
@@ -125,11 +185,15 @@ object RecipeStepNarrator {
         }
     }
 
-    private fun String.ensureSentenceEnd(): String {
-        val trimmed = trim()
-        if (trimmed.isEmpty()) return trimmed
-        val last = trimmed.last()
-        return if (last == '.' || last == '!' || last == '?' || last == '।') trimmed
-        else "$trimmed."
+    /**
+     * Strips a single trailing sentence-ending mark so we can splice the
+     * fragment into a longer sentence without producing double-punctuation.
+     */
+    private fun String.stripTrailingPunct(): String {
+        if (isEmpty()) return this
+        val last = last()
+        return if (last == '.' || last == '!' || last == '?' || last == '।' || last == ',') {
+            dropLast(1).trimEnd()
+        } else this
     }
 }

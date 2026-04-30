@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-private const val TAG = "GeminiTranslationSvc"
+private const val TAG = "TranslationDebug"
 
 /**
  * Service that asks Gemini to translate the English copy of a recipe (recipe
@@ -117,7 +117,9 @@ class GeminiTranslationService(
 
         Log.d(TAG, "Received translation (${responseText.length} chars): ${responseText.take(800)}")
 
-        return parse(responseText, targetLanguageCode)
+        val translatedPayload = parse(responseText, targetLanguageCode)
+        Log.d(TAG, "Parsed translated payload: $translatedPayload")
+        return translatedPayload
     }
 
     private fun parse(rawText: String, fallbackLang: String): TranslatedPayload {

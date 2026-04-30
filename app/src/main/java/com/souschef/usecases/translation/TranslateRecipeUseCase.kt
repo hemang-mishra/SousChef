@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 
-private const val TAG = "TranslateRecipeUC"
+private const val TAG = "TranslationDebug"
 
 /**
  * Translates a single recipe — including its steps and the global ingredients
@@ -237,10 +237,12 @@ class TranslateRecipeUseCase(
                     ?: step.expectedVisualCue
             )
             val mergedMap = step.localizations + (languageCode to loc)
+            val firestoreMap = mergedMap.toFirestoreStepMap()
+            Log.d(TAG, "Step #${index + 1} saving localizations map: $firestoreMap")
             val result = recipeRepository.updateStep(
                 recipeId,
                 step.stepId,
-                mapOf("localizations" to mergedMap.toFirestoreStepMap())
+                mapOf("localizations" to firestoreMap)
             ).first { it !is Resource.Loading }
             if (result is Resource.Failure) {
                 Log.e(TAG, "Step #${index + 1} write failed: ${result.message}")

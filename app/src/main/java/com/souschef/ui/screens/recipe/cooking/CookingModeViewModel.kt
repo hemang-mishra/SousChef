@@ -286,10 +286,52 @@ class CookingModeViewModel(
     }
 
     private fun observeSessionFlows(s: CookingSessionUseCase) {
-        viewModelScope.launch { s.currentStepIndex.collect    { _currentStepIndex.value     = it } }
+        viewModelScope.launch {
+            s.currentStepIndex.collect { idx ->
+                _currentStepIndex.value = idx
+                onStepEntered(idx)
+            }
+        }
         viewModelScope.launch { s.timerMillisRemaining.collect { _timerMillisRemaining.value = it } }
         viewModelScope.launch { s.isTimerRunning.collect       { _isTimerRunning.value       = it } }
         viewModelScope.launch { s.timerFinished.collect        { _timerFinished.value        = it } }
+    }
+
+    /**
+     * Called whenever the active step changes (including the very first step
+     * when the session starts). Drives the hands-free experience:
+     *
+     *  1. Speaks a humanized narration of the new step in the active language.
+     *  2. If the step has a timer, automatically starts it — the narration
+     *     itself announces "I've started a 15-second timer for you".
+     *
+     * The user can still pause / reset the timer or replay the narration
+     * from the screen at any time.
+     */
+    private fun onStepEntered(index: Int) {
+        val steps = _steps.value
+        val step = steps.getOrNull(index) ?: return
+        val ingredient = _stepIngredientMap.value[index]
+        val language = languageManager.currentLanguage.value
+        val timerSecs = step.timerSeconds
+        val willAutoStartTimer = timerSecs != null && timerSecs > 0
+
+        if (willAutoStartTimer) {
+            // Kick the countdown immediately so the on-screen number starts
+            // ticking as the narrator says "the timer has started".
+            session?.startTimer()
+        }
+
+        val narration = RecipeStepNarrator.build(
+            step = step,
+            stepIndex = index,
+            totalSteps = steps.size,
+            ingredient = ingredient,
+            language = language,
+            autoTimerStarted = willAutoStartTimer
+        )
+        ttsService.stop()
+        ttsService.speak(narration, language)
     }
 
     // ── User Actions ────────────────────────────────────────────────────────
@@ -299,9 +341,9 @@ class CookingModeViewModel(
         super.onCleared()
     }
 
-    fun nextStep()     { session?.nextStep(); ttsService.stop() }
-    fun previousStep() { session?.previousStep(); ttsService.stop() }
-    fun goToStep(index: Int) { session?.goToStep(index); ttsService.stop() }
+    fun nextStep()     { session?.nextStep() }
+    fun previousStep() { session?.previousStep() }
+    fun goToStep(index: Int) { session?.goToStep(index) }
     fun startTimer()   { session?.startTimer() }
     fun pauseTimer()   { session?.pauseTimer() }
     fun resetTimer()   { session?.resetTimer() }
@@ -416,9 +458,13 @@ class CookingModeViewModel(
     }
 
     /**
-     * Builds a detailed narration for the current step and speaks it via TTS.
-     * If TTS is already speaking, this stops it (so the user can tap once
-     * to start, tap again to silence).
+     * Replays / silences the narration for the current step.
+     *
+     * - If TTS is currently speaking, this stops it (acts as a mute toggle).
+     * - Otherwise re-speaks the current step's narration. The timer is NOT
+     *   re-started here — replay is a passive action — so we always pass
+     *   `autoTimerStarted = false` to avoid the narrator falsely announcing
+     *   that it just started a timer that's already mid-countdown.
      */
     fun toggleNarration() {
         if (ttsService.isSpeaking.value) {
@@ -433,7 +479,8 @@ class CookingModeViewModel(
             stepIndex = state.currentStepIndex,
             totalSteps = state.steps.size,
             ingredient = ingredient,
-            language = state.language
+            language = state.language,
+            autoTimerStarted = false
         )
         ttsService.speak(text, state.language)
     }
@@ -465,11 +512,13 @@ class CookingModeViewModel(
     }
 
     private suspend fun reloadAfterTranslation() {
+        android.util.Log.d("TranslationDebug", "Reloading steps and ingredients after translation")
         val recipeResult = recipeRepository.getRecipeWithSteps(recipeId)
             .first { it !is Resource.Loading }
         val payload = (recipeResult as? Resource.Success)?.data ?: return
         val recipe = payload.first
         val steps = payload.second.sortedBy { it.stepNumber }
+        android.util.Log.d("TranslationDebug", "Fetched ${steps.size} steps. Step 0 localizations: ${steps.firstOrNull()?.localizations}")
 
         val ingredientIds = recipe.ingredients.map { it.globalIngredientId }.distinct()
         val resolved = if (ingredientIds.isEmpty()) emptyList() else {
