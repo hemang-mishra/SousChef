@@ -32,14 +32,24 @@ class DispenserViewModel(
     private val _successMessage  = MutableStateFlow<String?>(null)
     private val _searchQuery     = MutableStateFlow("")
     private val _dispensable     = MutableStateFlow<List<GlobalIngredient>>(emptyList())
+    /** id → imageUrl lookup for the entire library (not just dispensable ones). */
+    private val _imageById       = MutableStateFlow<Map<String, String?>>(emptyMap())
+
+    private data class Extras(
+        val isLoading: Boolean,
+        val isSaving: Boolean,
+        val error: String?,
+        val successMessage: String?,
+        val imageById: Map<String, String?>
+    )
 
     val uiState: StateFlow<DispenserUiState> = combine(
         getCompartmentsUseCase.execute(),
         bleDeviceManager.connectionState,
         _dispensable,
         _searchQuery,
-        combine(_isLoading, _isSaving, _error, _successMessage) { l, s, e, m ->
-            arrayOf<Any?>(l, s, e, m)
+        combine(_isLoading, _isSaving, _error, _successMessage, _imageById) { l, s, e, m, img ->
+            Extras(l, s, e, m, img)
         }
     ) { compartmentsRes, bleState, dispensable, query, extras ->
         val compartments = (compartmentsRes as? Resource.Success)?.data
@@ -48,17 +58,17 @@ class DispenserViewModel(
         val filtered = if (query.isBlank()) dispensable
         else dispensable.filter { it.name.contains(query, ignoreCase = true) }
 
-        @Suppress("UNCHECKED_CAST")
         DispenserUiState(
             compartments          = compartments,
             connectionState       = bleState,
             dispensableIngredients = dispensable,
             filteredIngredients   = filtered,
+            ingredientImageById   = extras.imageById,
             searchQuery           = query,
-            isLoading             = extras[0] as Boolean,
-            isSaving              = extras[1] as Boolean,
-            error                 = extras[2] as String?,
-            successMessage        = extras[3] as String?
+            isLoading             = extras.isLoading,
+            isSaving              = extras.isSaving,
+            error                 = extras.error,
+            successMessage        = extras.successMessage
         )
     }.stateIn(
         scope         = viewModelScope,
@@ -120,11 +130,23 @@ class DispenserViewModel(
         }
     }
 
-    fun onRefill(compartmentId: Int) {
+    /**
+     * Records a physical refill. If [newCapacityTsp] is provided, the
+     * compartment's total capacity is updated to that exact amount — i.e.
+     * "I just poured in 6 tsp" snaps the gauge to 6 tsp full. Pass null to
+     * top the existing capacity back up without changing it.
+     */
+    fun onRefill(compartmentId: Int, newCapacityTsp: Double? = null) {
         viewModelScope.launch(Dispatchers.IO) {
-            refillCompartmentUseCase.execute(compartmentId).collect { result ->
+            refillCompartmentUseCase.execute(compartmentId, newCapacityTsp).collect { result ->
                 if (result is Resource.Success) {
-                    _successMessage.value = "Compartment $compartmentId marked as refilled"
+                    _successMessage.value = if (newCapacityTsp != null) {
+                        "Compartment $compartmentId refilled to %.1f tsp".format(newCapacityTsp)
+                    } else {
+                        "Compartment $compartmentId marked as refilled"
+                    }
+                } else if (result is Resource.Failure) {
+                    _error.value = result.message ?: "Failed to record refill"
                 }
             }
         }
@@ -140,6 +162,10 @@ class DispenserViewModel(
             _isLoading.value = true
             ingredientRepository.getAllIngredients().collect { result ->
                 _dispensable.value = result.filter { it.isDispensable }
+                // Index every ingredient (not just dispensables) so the
+                // dispenser screen can render the latest imageUrl even when
+                // the compartment's denormalised copy is stale.
+                _imageById.value = result.associate { it.ingredientId to it.imageUrl }
                 _isLoading.update { false }
             }
         }

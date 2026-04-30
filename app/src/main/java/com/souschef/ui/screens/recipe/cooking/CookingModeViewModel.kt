@@ -20,9 +20,12 @@ import com.souschef.util.RecipeStepNarrator
 import com.souschef.util.Resource
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -78,7 +81,16 @@ class CookingModeViewModel(
     // Phase 6: language + narration
     private val _isTranslating          = MutableStateFlow(false)
 
+    /**
+     * One-shot haptic events the screen should react to. These are NOT part of
+     * [uiState] because re-collecting state shouldn't replay vibrations on
+     * configuration changes (e.g. screen rotation).
+     */
+    private val _hapticEvents = MutableSharedFlow<HapticEvent>(extraBufferCapacity = 4)
+    val hapticEvents: SharedFlow<HapticEvent> = _hapticEvents.asSharedFlow()
+
     private var session: CookingSessionUseCase? = null
+    private var lastTimerFinished = false
 
     // ── Public UiState ──────────────────────────────────────────────────────
 
@@ -294,7 +306,29 @@ class CookingModeViewModel(
         }
         viewModelScope.launch { s.timerMillisRemaining.collect { _timerMillisRemaining.value = it } }
         viewModelScope.launch { s.isTimerRunning.collect       { _isTimerRunning.value       = it } }
-        viewModelScope.launch { s.timerFinished.collect        { _timerFinished.value        = it } }
+        viewModelScope.launch {
+            s.timerFinished.collect { finished ->
+                _timerFinished.value = finished
+                // Edge-trigger: only act on the false → true transition so we
+                // don't re-fire haptics or TTS every time the flow re-emits.
+                if (finished && !lastTimerFinished) {
+                    onTimerFinished()
+                }
+                lastTimerFinished = finished
+            }
+        }
+    }
+
+    /**
+     * Called when the active step's countdown timer reaches zero. Plays a
+     * spoken alert via TTS and dispatches a strong haptic so the user knows
+     * to come back to the pan even if their phone is across the kitchen.
+     */
+    private fun onTimerFinished() {
+        val language = languageManager.currentLanguage.value
+        ttsService.stop()
+        ttsService.speak(RecipeStepNarrator.timerFinishedAnnouncement(language), language)
+        viewModelScope.launch { _hapticEvents.emit(HapticEvent.TimerFinished) }
     }
 
     /**
@@ -302,25 +336,28 @@ class CookingModeViewModel(
      * when the session starts). Drives the hands-free experience:
      *
      *  1. Speaks a humanized narration of the new step in the active language.
-     *  2. If the step has a timer, automatically starts it — the narration
-     *     itself announces "I've started a 15-second timer for you".
+     *  2. If the step has a timer, schedules an auto-start with a small
+     *     delay so the user has a beat to register the new step on screen
+     *     before the countdown begins ticking.
      *
      * The user can still pause / reset the timer or replay the narration
      * from the screen at any time.
      */
+    private var pendingTimerStart: kotlinx.coroutines.Job? = null
+
     private fun onStepEntered(index: Int) {
+        // Cancel any timer auto-start scheduled for the previous step — if
+        // the user advanced before that delay fired, we don't want it
+        // starting a timer on the wrong step.
+        pendingTimerStart?.cancel()
+        pendingTimerStart = null
+
         val steps = _steps.value
         val step = steps.getOrNull(index) ?: return
         val ingredient = _stepIngredientMap.value[index]
         val language = languageManager.currentLanguage.value
         val timerSecs = step.timerSeconds
         val willAutoStartTimer = timerSecs != null && timerSecs > 0
-
-        if (willAutoStartTimer) {
-            // Kick the countdown immediately so the on-screen number starts
-            // ticking as the narrator says "the timer has started".
-            session?.startTimer()
-        }
 
         val narration = RecipeStepNarrator.build(
             step = step,
@@ -332,6 +369,21 @@ class CookingModeViewModel(
         )
         ttsService.stop()
         ttsService.speak(narration, language)
+
+        if (willAutoStartTimer) {
+            // Slight delay before kicking off the countdown — gives the user
+            // a moment to look at the step and lets the narrator say the
+            // first sentence before they hear the seconds tick down. Captured
+            // so we can cancel it if the user moves on quickly.
+            pendingTimerStart = viewModelScope.launch {
+                kotlinx.coroutines.delay(AUTO_TIMER_START_DELAY_MS)
+                // Re-check that we're still on the same step in case the
+                // user navigated during the delay.
+                if (_currentStepIndex.value == index) {
+                    session?.startTimer()
+                }
+            }
+        }
     }
 
     // ── User Actions ────────────────────────────────────────────────────────
@@ -341,9 +393,21 @@ class CookingModeViewModel(
         super.onCleared()
     }
 
-    fun nextStep()     { session?.nextStep() }
-    fun previousStep() { session?.previousStep() }
-    fun goToStep(index: Int) { session?.goToStep(index) }
+    fun nextStep() {
+        val advanced = session?.nextStep() == true
+        if (advanced) viewModelScope.launch { _hapticEvents.emit(HapticEvent.StepAdvanced) }
+    }
+    fun previousStep() {
+        val moved = session?.previousStep() == true
+        if (moved) viewModelScope.launch { _hapticEvents.emit(HapticEvent.StepAdvanced) }
+    }
+    fun goToStep(index: Int) {
+        val before = _currentStepIndex.value
+        session?.goToStep(index)
+        if (before != _currentStepIndex.value) {
+            viewModelScope.launch { _hapticEvents.emit(HapticEvent.StepAdvanced) }
+        }
+    }
     fun startTimer()   { session?.startTimer() }
     fun pauseTimer()   { session?.pauseTimer() }
     fun resetTimer()   { session?.resetTimer() }
@@ -511,6 +575,18 @@ class CookingModeViewModel(
         }
     }
 
+    private companion object {
+        /**
+         * Grace period between landing on a step with a timer and actually
+         * starting the countdown. Keeps the UX feeling unhurried — the user
+         * sees the step, hears the narrator finish their sentence, and only
+         * then does the on-screen counter begin to tick. Five seconds gives
+         * the TTS engine room to deliver the full step intro plus the
+         * "I've started a timer" line before the count begins.
+         */
+        private const val AUTO_TIMER_START_DELAY_MS = 5000L
+    }
+
     private suspend fun reloadAfterTranslation() {
         android.util.Log.d("TranslationDebug", "Reloading steps and ingredients after translation")
         val recipeResult = recipeRepository.getRecipeWithSteps(recipeId)
@@ -543,4 +619,15 @@ class CookingModeViewModel(
         _adjustedIngredients.value = adjusted
         _stepIngredientMap.value = buildStepIngredientMap(steps, adjusted)
     }
+}
+
+/**
+ * One-shot UI feedback events emitted by the cooking-mode flow. The screen
+ * collects these to drive haptics so the ViewModel stays platform-agnostic.
+ */
+sealed class HapticEvent {
+    /** Light tick when the user moves between steps. */
+    data object StepAdvanced : HapticEvent()
+    /** Strong, longer pattern when a step's countdown finishes. */
+    data object TimerFinished : HapticEvent()
 }

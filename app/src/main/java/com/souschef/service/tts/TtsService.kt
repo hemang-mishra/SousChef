@@ -82,6 +82,24 @@ class TtsService(private val context: Context) {
             tts?.setLanguage(Locale.US)
         } else {
             _missingLanguagePack.value = null
+
+            try {
+                val availableVoices = tts?.voices
+                if (availableVoices != null) {
+                    val localeVoices = availableVoices.filter { it.locale.language == locale.language }
+                    val bestVoice = localeVoices.find { it.isNetworkConnectionRequired || it.name.contains("network", ignoreCase = true) }
+                        ?: localeVoices.firstOrNull()
+
+                    if (bestVoice != null) {
+                        tts?.voice = bestVoice
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to set custom voice", e)
+            }
+
+            tts?.setSpeechRate(0.95f)
+            tts?.setPitch(0.9f)
         }
 
         val utteranceId = "souschef_${System.currentTimeMillis()}"
