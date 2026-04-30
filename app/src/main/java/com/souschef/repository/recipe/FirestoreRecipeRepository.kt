@@ -5,6 +5,7 @@ import com.souschef.model.recipe.RecipeStep
 import com.souschef.service.recipe.FirebaseRecipeService
 import com.souschef.util.Resource
 import com.souschef.util.safeFirestoreCall
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -30,28 +31,64 @@ class FirestoreRecipeRepository(
 
     override fun getRecipe(recipeId: String): Flow<Resource<Recipe>> = flow {
         emit(Resource.loading())
-        val result = safeFirestoreCall { service.getRecipe(recipeId) }
+        var cacheEmitted = false
+        try {
+            val cacheData = service.getRecipe(recipeId, Source.CACHE)
+            if (cacheData != null) {
+                emit(Resource.success(cacheData))
+                cacheEmitted = true
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            // Ignore cache miss
+        }
+
+        val result = safeFirestoreCall { service.getRecipe(recipeId, Source.DEFAULT) }
         when (result) {
             is Resource.Success -> {
-                if (result.data != null) emit(Resource.success(result.data))
-                else emit(Resource.failure(message = "Recipe not found"))
+                if (result.data != null) {
+                    emit(Resource.success(result.data))
+                } else if (!cacheEmitted) {
+                    emit(Resource.failure(message = "Recipe not found"))
+                }
             }
-            is Resource.Failure -> emit(Resource.failure(result.error, result.message))
+            is Resource.Failure -> {
+                if (!cacheEmitted) emit(Resource.failure(result.error, result.message))
+            }
             is Resource.Loading -> { /* already emitted */ }
         }
     }
 
     override fun getRecipeWithSteps(recipeId: String): Flow<Resource<Pair<Recipe, List<RecipeStep>>>> = flow {
         emit(Resource.loading())
-        val result = safeFirestoreCall { service.getRecipeWithSteps(recipeId) }
+        var cacheEmitted = false
+        try {
+            val cacheData = service.getRecipeWithSteps(recipeId, Source.CACHE)
+            val recipe = cacheData.first
+            val steps = cacheData.second
+            if (recipe != null) {
+                emit(Resource.success(recipe to steps))
+                cacheEmitted = true
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            // Ignore cache miss
+        }
+
+        val result = safeFirestoreCall { service.getRecipeWithSteps(recipeId, Source.DEFAULT) }
         when (result) {
             is Resource.Success -> {
                 val recipe = result.data?.first
                 val steps = result.data?.second ?: emptyList()
-                if (recipe != null) emit(Resource.success(recipe to steps))
-                else emit(Resource.failure(message = "Recipe not found"))
+                if (recipe != null) {
+                    emit(Resource.success(recipe to steps))
+                } else if (!cacheEmitted) {
+                    emit(Resource.failure(message = "Recipe not found"))
+                }
             }
-            is Resource.Failure -> emit(Resource.failure(result.error, result.message))
+            is Resource.Failure -> {
+                if (!cacheEmitted) emit(Resource.failure(result.error, result.message))
+            }
             is Resource.Loading -> { /* already emitted */ }
         }
     }
@@ -82,8 +119,30 @@ class FirestoreRecipeRepository(
 
     override fun getSteps(recipeId: String): Flow<Resource<List<RecipeStep>>> = flow {
         emit(Resource.loading())
-        val result = safeFirestoreCall { service.getSteps(recipeId) }
-        emit(result)
+        var cacheEmitted = false
+        try {
+            val cacheData = service.getSteps(recipeId, Source.CACHE)
+            if (cacheData.isNotEmpty()) {
+                emit(Resource.success(cacheData))
+                cacheEmitted = true
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            // Ignore cache miss
+        }
+
+        val result = safeFirestoreCall { service.getSteps(recipeId, Source.DEFAULT) }
+        when (result) {
+            is Resource.Success -> {
+                if (result.data != null) {
+                    emit(Resource.success(result.data))
+                }
+            }
+            is Resource.Failure -> {
+                if (!cacheEmitted) emit(Resource.failure(result.error, result.message))
+            }
+            is Resource.Loading -> { /* already emitted */ }
+        }
     }
 
     override fun deleteAllSteps(recipeId: String): Flow<Resource<Unit>> = flow {

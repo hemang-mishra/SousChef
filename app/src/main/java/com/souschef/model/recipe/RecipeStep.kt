@@ -64,7 +64,7 @@ data class RecipeStep(
      * non-empty.
      */
     @Deprecated("Use ingredientId instead. Kept for Firestore backward compat.")
-    val ingredientReferences: List<String> = emptyList(),
+    val ingredientReferences: List<String>? = emptyList(),
 
     /**
      * **Deprecated** — raw AI names that couldn't be matched.
@@ -72,7 +72,7 @@ data class RecipeStep(
      * dropped or surfaced as warnings in the wizard.
      */
     @Deprecated("No longer stored for new steps.")
-    val unresolvedIngredientNames: List<String> = emptyList(),
+    val unresolvedIngredientNames: List<String>? = emptyList(),
 
     /**
      * Map of languageCode → translated copy of this step's user-facing fields.
@@ -85,7 +85,7 @@ data class RecipeStep(
     /** Resolved effective ingredient ID, with backward-compat fallback. */
     @Suppress("DEPRECATION")
     val effectiveIngredientId: String?
-        get() = ingredientId ?: ingredientReferences.firstOrNull()
+        get() = ingredientId ?: ingredientReferences?.firstOrNull()
 
     /** Localized instruction text, falling back to English. */
     fun instructionIn(language: String): String =

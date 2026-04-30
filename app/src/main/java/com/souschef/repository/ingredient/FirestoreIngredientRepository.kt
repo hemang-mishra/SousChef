@@ -4,6 +4,7 @@ import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.service.ingredient.FirebaseIngredientService
 import com.souschef.util.Resource
 import com.souschef.util.safeFirestoreCall
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -35,13 +36,30 @@ class FirestoreIngredientRepository(
 
     override fun getIngredient(ingredientId: String): Flow<Resource<GlobalIngredient>> = flow {
         emit(Resource.loading())
-        val result = safeFirestoreCall { service.getIngredient(ingredientId) }
+        var cacheEmitted = false
+        try {
+            val cacheData = service.getIngredient(ingredientId, Source.CACHE)
+            if (cacheData != null) {
+                emit(Resource.success(cacheData))
+                cacheEmitted = true
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            // Ignore cache miss
+        }
+
+        val result = safeFirestoreCall { service.getIngredient(ingredientId, Source.DEFAULT) }
         when (result) {
             is Resource.Success -> {
-                if (result.data != null) emit(Resource.success(result.data))
-                else emit(Resource.failure(message = "Ingredient not found"))
+                if (result.data != null) {
+                    emit(Resource.success(result.data))
+                } else if (!cacheEmitted) {
+                    emit(Resource.failure(message = "Ingredient not found"))
+                }
             }
-            is Resource.Failure -> emit(Resource.failure(result.error, result.message))
+            is Resource.Failure -> {
+                if (!cacheEmitted) emit(Resource.failure(result.error, result.message))
+            }
             is Resource.Loading -> { /* already emitted */ }
         }
     }
@@ -52,8 +70,30 @@ class FirestoreIngredientRepository(
 
     override fun getIngredientsByIds(ids: List<String>): Flow<Resource<List<GlobalIngredient>>> = flow {
         emit(Resource.loading())
-        val result = safeFirestoreCall { service.getIngredientsByIds(ids) }
-        emit(result)
+        var cacheEmitted = false
+        try {
+            val cacheData = service.getIngredientsByIds(ids, Source.CACHE)
+            if (cacheData.isNotEmpty()) {
+                emit(Resource.success(cacheData))
+                cacheEmitted = true
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            // Ignore cache miss
+        }
+
+        val result = safeFirestoreCall { service.getIngredientsByIds(ids, Source.DEFAULT) }
+        when (result) {
+            is Resource.Success -> {
+                if (result.data != null) {
+                    emit(Resource.success(result.data))
+                }
+            }
+            is Resource.Failure -> {
+                if (!cacheEmitted) emit(Resource.failure(result.error, result.message))
+            }
+            is Resource.Loading -> { /* already emitted */ }
+        }
     }
 
     override fun existsByName(name: String): Flow<Resource<Boolean>> = flow {
