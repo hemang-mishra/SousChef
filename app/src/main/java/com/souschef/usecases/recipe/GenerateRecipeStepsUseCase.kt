@@ -162,15 +162,29 @@ class GenerateRecipeStepsUseCase(
             }
         }
 
-        // 3. Build RecipeIngredient list
-        val recipeIngredients = generatedRecipe.ingredients.mapNotNull { aiIngredient ->
-            val globalId = nameToIdMap[aiIngredient.name.trim()] ?: return@mapNotNull null
-            RecipeIngredient(
-                globalIngredientId = globalId,
-                quantity = aiIngredient.quantity,
-                unit = aiIngredient.unit
-            )
-        }
+        // 3. Build RecipeIngredient list, merging duplicates that resolved to
+        //    the same global ingredient (AI sometimes lists the same item
+        //    twice under slightly different names).
+        val recipeIngredients = generatedRecipe.ingredients
+            .mapNotNull { aiIngredient ->
+                val globalId = nameToIdMap[aiIngredient.name.trim()] ?: return@mapNotNull null
+                RecipeIngredient(
+                    globalIngredientId = globalId,
+                    quantity = aiIngredient.quantity,
+                    unit = aiIngredient.unit
+                )
+            }
+            .groupBy { it.globalIngredientId }
+            .map { (id, group) ->
+                // Keep the first entry's unit; sum the quantities (common when
+                // the AI splits an ingredient like "1 onion (chopped) + 1 onion (sliced)").
+                val first = group.first()
+                first.copy(quantity = group.sumOf { it.quantity }).also {
+                    if (group.size > 1) {
+                        Log.d(TAG, "Merged ${group.size} duplicate entries for ingredient $id")
+                    }
+                }
+            }
 
         // 4. Resolve step ingredientId from raw name → globalIngredientId
         val resolvedSteps = generatedRecipe.steps.map { step ->

@@ -41,17 +41,26 @@ val viewModelModule = module {
 
     // Recipe creation — factory, needs currentUser from AppViewModel and optional recipeId
     factory { (currentUser: com.souschef.model.auth.UserProfile, recipeId: String?) ->
-        CreateRecipeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), currentUser, recipeId)
+        CreateRecipeViewModel(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            get(org.koin.core.qualifier.named("appScope")),
+            currentUser,
+            recipeId
+        )
     }
 
     // Recipe overview — factory, needs recipeId and currentUser
     factory { (recipeId: String, currentUser: com.souschef.model.auth.UserProfile) ->
-        RecipeOverviewViewModel(get(), get(), get(), get(), recipeId, currentUser.uid)
+        RecipeOverviewViewModel(get(), get(), get(), get(), get(), get(), recipeId, currentUser.uid)
     }
 
     // Cooking mode — factory, needs recipeId + serving/flavour params + Phase 5 dispense deps
     factory { (recipeId: String, servings: Int, spice: Float, salt: Float, sweetness: Float) ->
-        CookingModeViewModel(get(), get(), get(), get(), get(), get(), recipeId, servings, spice, salt, sweetness)
+        CookingModeViewModel(
+            get(), get(), get(), get(), get(), get(),
+            get(), get(), get(),
+            recipeId, servings, spice, salt, sweetness
+        )
     }
 
     // AI Step Generation — now integrated into CreateRecipeViewModel

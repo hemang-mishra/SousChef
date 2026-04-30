@@ -36,6 +36,29 @@ data class Recipe(
     val stepCount: Int = 0,
     val hasSteps: Boolean = false,
     val tags: List<String> = emptyList(),
-    val ingredients: List<RecipeIngredient> = emptyList()
-)
+    val ingredients: List<RecipeIngredient> = emptyList(),
+
+    /**
+     * Map of languageCode → translated [RecipeLocalization].
+     * The canonical [title] / [description] fields above always hold the
+     * English copy. Use [titleIn] / [descriptionIn] to read in any language
+     * with a safe English fallback.
+     */
+    val localizations: Map<String, RecipeLocalization> = emptyMap(),
+
+    /**
+     * Set of language codes for which this recipe (and all its steps +
+     * referenced ingredients) has been fully translated. Used by the lazy
+     * translation flow to avoid re-translating on every view.
+     */
+    val translatedLanguages: List<String> = emptyList()
+) {
+    /** Returns the title in [language], falling back to the English [title]. */
+    fun titleIn(language: String): String =
+        localizations[language]?.title?.takeIf { it.isNotBlank() } ?: title
+
+    /** Returns the description in [language], falling back to English. */
+    fun descriptionIn(language: String): String =
+        localizations[language]?.description?.takeIf { it.isNotBlank() } ?: description
+}
 

@@ -14,6 +14,7 @@ import com.souschef.usecases.recipe.PublishRecipeUseCase
 import com.souschef.usecases.recipe.RecipeCalculationUseCase
 import com.souschef.usecases.recipe.SaveRecipeStepsUseCase
 import com.souschef.usecases.recipe.UpdateRecipeUseCase
+import com.souschef.usecases.translation.TranslateRecipeUseCase
 import org.koin.dsl.module
 
 /**
@@ -29,6 +30,9 @@ val useCaseModule = module {
     single { DeleteRecipeUseCase(get(), get()) }
     /** Now takes IngredientRepository as 2nd arg for fuzzy matching. */
     single { GenerateRecipeStepsUseCase(get(), get()) }
+
+    // ── Translation (multi-language) ──────────────────────────────────────────
+    single { TranslateRecipeUseCase(get(), get(), get()) }
 
     // ── Ingredient ────────────────────────────────────────────────────────────
     single { AddGlobalIngredientUseCase(get()) }

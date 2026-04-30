@@ -16,8 +16,38 @@ data class ResolvedIngredient(
     val isDispensable: Boolean = false,
     val spiceIntensityValue: Double = 0.0,
     val sweetnessValue: Double = 0.0,
-    val saltnessValue: Double = 0.0
+    val saltnessValue: Double = 0.0,
+    /**
+     * Map carried over from the underlying [GlobalIngredient] so the UI /
+     * narrator can render this ingredient in the active language.
+     */
+    val localizations: Map<String, GlobalIngredientLocalization> = emptyMap()
 ) {
+    /** Localized ingredient name, falling back to English. */
+    fun nameIn(language: String): String =
+        localizations[language]?.name?.takeIf { it.isNotBlank() } ?: name
+
+    /**
+     * Localized unit. Order:
+     * 1. The static [CommonUnits] table (handles the canonical English unit
+     *    strings like "pieces", "grams", "ml") so we never narrate
+     *    "3 pieces tomatoes" in Hindi.
+     * 2. The global ingredient's `localizations[language].defaultUnit` (only
+     *    used when the recipe's [unit] equals that ingredient's default
+     *    unit).
+     * 3. Fall back to the canonical English [unit].
+     */
+    fun unitIn(language: String): String {
+        val canonical = unit
+        // Static dictionary lookup first — most reliable.
+        CommonUnits.translate(canonical, language)?.let { return it }
+        // If the recipe is using the ingredient's default unit, the global
+        // ingredient's localized default is a good match.
+        val globalDefault = localizations[language]?.defaultUnit
+        if (!globalDefault.isNullOrBlank()) return globalDefault
+        return canonical
+    }
+
     companion object {
         /**
          * Resolves a [RecipeIngredient] by joining it with the corresponding [GlobalIngredient].
@@ -33,7 +63,8 @@ data class ResolvedIngredient(
                 isDispensable = globalIngredient.isDispensable,
                 spiceIntensityValue = globalIngredient.spiceIntensityValue,
                 sweetnessValue = globalIngredient.sweetnessValue,
-                saltnessValue = globalIngredient.saltnessValue
+                saltnessValue = globalIngredient.saltnessValue,
+                localizations = globalIngredient.localizations
             )
         }
     }

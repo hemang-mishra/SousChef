@@ -195,7 +195,14 @@ internal fun Step2Ingredients(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                itemsIndexed(ingredients, key = { _, it -> it.globalIngredientId }) { _, ingredient ->
+                // Compose's LazyColumn requires unique keys. AI generation can
+                // occasionally produce two entries that fuzzy-match to the same
+                // globalIngredientId — combine the id with the index so we
+                // don't crash with "Key was already used".
+                itemsIndexed(
+                    ingredients,
+                    key = { index, it -> "${it.globalIngredientId}_$index" }
+                ) { _, ingredient ->
                     val globalIngredient = globalMap[ingredient.globalIngredientId]
                     RecipeIngredientCard(
                         ingredient = ingredient,

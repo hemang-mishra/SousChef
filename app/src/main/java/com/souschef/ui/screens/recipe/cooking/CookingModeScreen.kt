@@ -39,8 +39,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -164,7 +168,10 @@ fun CookingModeScreen(
                 pendingDispenseData = DispenseData(globalIngredientId, name, quantity, unit)
                 permissionLauncher.launch(BlePermissionHelper.requiredPermissions)
             }
-        }
+        },
+        onLanguageChange = viewModel::setLanguage,
+        onToggleNarration = viewModel::toggleNarration,
+        onRetranslate = viewModel::retranslate
     )
 }
 
@@ -187,7 +194,10 @@ fun CookingModeScreenLayout(
     onStartTimer: () -> Unit,
     onPauseTimer: () -> Unit,
     onResetTimer: () -> Unit,
-    onDispense: (String, String, Double, String) -> Unit
+    onDispense: (String, String, Double, String) -> Unit,
+    onLanguageChange: (String) -> Unit = {},
+    onToggleNarration: () -> Unit = {},
+    onRetranslate: () -> Unit = {}
 ) {
     if (uiState.isLoading) {
         CookingModeShimmer()
@@ -213,6 +223,12 @@ fun CookingModeScreenLayout(
     val currentStep = uiState.steps.getOrNull(uiState.currentStepIndex) ?: return
     val isLastStep = uiState.currentStepIndex >= uiState.steps.size - 1
     val isFirstStep = uiState.currentStepIndex == 0
+    val isHindi = uiState.language == com.souschef.model.recipe.SupportedLanguages.HINDI
+    val stepHeader = if (isHindi) {
+        "चरण ${uiState.currentStepIndex + 1} / ${uiState.steps.size}"
+    } else {
+        "Step ${uiState.currentStepIndex + 1} of ${uiState.steps.size}"
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -221,7 +237,7 @@ fun CookingModeScreenLayout(
                 windowInsets = WindowInsets(top = 0.dp),
                 title = {
                     Text(
-                        text = "Step ${uiState.currentStepIndex + 1} of ${uiState.steps.size}",
+                        text = stepHeader,
                         style = MaterialTheme.typography.titleMedium,
                         color = AppColors.textPrimary()
                     )
@@ -232,6 +248,43 @@ fun CookingModeScreenLayout(
                             Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = "Exit cooking mode",
                             tint = AppColors.textPrimary()
+                        )
+                    }
+                },
+                actions = {
+                    com.souschef.ui.components.LanguageToggle(
+                        currentLanguage = uiState.language,
+                        onLanguageChange = onLanguageChange,
+                        modifier = Modifier.padding(end = 6.dp)
+                    )
+                    IconButton(onClick = onToggleNarration) {
+                        Icon(
+                            imageVector = if (uiState.isSpeaking)
+                                androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeOff
+                            else
+                                androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = if (uiState.isSpeaking) "Stop narration" else "Narrate step",
+                            tint = AppColors.gold()
+                        )
+                    }
+                    // Retranslate (force) — only meaningful for non-English
+                    if (uiState.language != com.souschef.model.recipe.SupportedLanguages.ENGLISH) {
+                        IconButton(
+                            onClick = onRetranslate,
+                            enabled = !uiState.isTranslating
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Outlined.Refresh,
+                                contentDescription = "Retranslate",
+                                tint = AppColors.gold()
+                            )
+                        }
+                    }
+                    if (uiState.isTranslating) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp).padding(end = 8.dp),
+                            color = AppColors.gold(),
+                            strokeWidth = 2.dp
                         )
                     }
                 },
@@ -250,13 +303,18 @@ fun CookingModeScreenLayout(
                 ) {
                     if (!isFirstStep) {
                         PremiumOutlinedButton(
-                            text = "← Previous",
+                            text = if (isHindi) "← पिछला" else "← Previous",
                             onClick = onPreviousStep,
                             modifier = Modifier.weight(1f)
                         )
                     }
                     PremiumButton(
-                        text = if (isLastStep) "Finish Cooking 🎉" else "Next Step →",
+                        text = when {
+                            isLastStep && isHindi -> "पकाना पूरा 🎉"
+                            isLastStep -> "Finish Cooking 🎉"
+                            isHindi -> "अगला चरण →"
+                            else -> "Next Step →"
+                        },
                         onClick = onNextStep,
                         modifier = Modifier.weight(1f)
                     )
@@ -304,6 +362,7 @@ fun CookingModeScreenLayout(
                     loadedCompartmentIngredientIds = uiState.loadedCompartmentIngredientIds,
                     loadedCompartmentIngredientNames = uiState.loadedCompartmentIngredientNames,
                     dispensingIds = uiState.dispensingIngredientIds,
+                    language = uiState.language,
                     onStartTimer = onStartTimer,
                     onPauseTimer = onPauseTimer,
                     onResetTimer = onResetTimer,
@@ -384,6 +443,7 @@ private fun StepContent(
     loadedCompartmentIngredientIds: Set<String>,
     loadedCompartmentIngredientNames: Set<String>,
     dispensingIds: Set<String>,
+    language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH,
     onStartTimer: () -> Unit,
     onPauseTimer: () -> Unit,
     onResetTimer: () -> Unit,
@@ -408,22 +468,25 @@ private fun StepContent(
                     StepTypeBadge(stepType = step.stepType)
                 }
 
-                // Instruction text
+                // Instruction text (localized)
                 Text(
-                    text = step.instructionText,
+                    text = step.instructionIn(language),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.3f
                 )
 
-                // Flame level
-                if (!step.flameLevel.isNullOrBlank()) {
-                    FlameLevelIndicator(level = step.flameLevel)
+                // Flame level (canonical English drives icons; localized label shown via FlameLevelIndicator)
+                step.flameLevel?.takeIf { it.isNotBlank() }?.let { canonical ->
+                    FlameLevelIndicator(
+                        level = canonical,
+                        displayLabel = step.flameLevelIn(language)
+                    )
                 }
 
-                // Visual cue
-                if (!step.expectedVisualCue.isNullOrBlank()) {
-                    VisualCueRow(cue = step.expectedVisualCue)
+                // Visual cue (localized)
+                step.expectedVisualCueIn(language)?.takeIf { it.isNotBlank() }?.let { cue ->
+                    VisualCueRow(cue = cue, language = language)
                 }
 
                 // Media
@@ -436,11 +499,11 @@ private fun StepContent(
         // Ingredient card for this step (single ingredient with dynamic quantity)
         if (stepIngredient != null) {
             val isLoadedById = loadedCompartmentIngredientIds.contains(stepIngredient.globalIngredientId)
-            val isLoadedByName = loadedCompartmentIngredientNames.any { 
+            val isLoadedByName = loadedCompartmentIngredientNames.any {
                 stepIngredient.name.lowercase().contains(it) || it.contains(stepIngredient.name.lowercase())
             }
             val isLoaded = isLoadedById || isLoadedByName
-            
+
             // Generate visual debug information
             val debugText = StringBuilder().apply {
                 append("ID: ${stepIngredient.globalIngredientId}\n")
@@ -450,12 +513,13 @@ private fun StepContent(
                 append("isLoadedByName: $isLoadedByName\n")
                 append("Loaded Names Available: $loadedCompartmentIngredientNames")
             }.toString()
-            
+
             StepIngredientCard(
                 ingredient = stepIngredient,
                 isDispensing = dispensingIds.contains(stepIngredient.globalIngredientId),
                 isLoaded = isLoaded,
                 debugInfo = debugText,
+                language = language,
                 onDispense = {
                     onDispense(
                         stepIngredient.globalIngredientId,
@@ -517,14 +581,14 @@ private fun StepNumberBadge(stepNumber: Int) {
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun FlameLevelIndicator(level: String) {
+private fun FlameLevelIndicator(level: String, displayLabel: String? = null) {
     val flameCount = when (level.lowercase()) {
         "low" -> 1
         "medium" -> 2
         "high" -> 3
         else -> 0
     }
-    val label = level.replaceFirstChar { it.uppercase() }
+    val label = (displayLabel ?: level).replaceFirstChar { it.uppercase() }
 
     if (flameCount == 0) return
 
@@ -532,12 +596,6 @@ private fun FlameLevelIndicator(level: String) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(
-            text = "Flame:",
-            style = MaterialTheme.typography.labelLarge,
-            color = AppColors.textSecondary()
-        )
-        Spacer(modifier = Modifier.width(4.dp))
         repeat(3) { index ->
             Text(
                 text = "🔥",
@@ -558,14 +616,18 @@ private fun FlameLevelIndicator(level: String) {
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun VisualCueRow(cue: String) {
+private fun VisualCueRow(
+    cue: String,
+    language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH
+) {
+    val prefix = if (language == com.souschef.model.recipe.SupportedLanguages.HINDI) "देखें: " else "Look for: "
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = "👁 ",
             style = MaterialTheme.typography.bodyMedium
         )
         Text(
-            text = "Look for: $cue",
+            text = "$prefix$cue",
             style = MaterialTheme.typography.bodyMedium,
             fontStyle = FontStyle.Italic,
             color = AppColors.textSecondary()
@@ -707,11 +769,13 @@ private fun StepIngredientCard(
     isDispensing: Boolean,
     isLoaded: Boolean,
     debugInfo: String = "",
+    language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH,
     onDispense: () -> Unit
 ) {
+    val isHindi = language == com.souschef.model.recipe.SupportedLanguages.HINDI
     GlassCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            PremiumSectionHeader(title = "Ingredient")
+            PremiumSectionHeader(title = if (isHindi) "सामग्री" else "Ingredient")
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -735,7 +799,7 @@ private fun StepIngredientCard(
                     }
                     Column {
                         Text(
-                            text = ingredient.name,
+                            text = ingredient.nameIn(language),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
@@ -743,7 +807,7 @@ private fun StepIngredientCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${ingredient.quantity.toOneDecimalString()} ${ingredient.unit}",
+                            text = "${ingredient.quantity.toOneDecimalString()} ${ingredient.unitIn(language)}",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Bold,
                             color = AppColors.gold()
@@ -776,7 +840,10 @@ private fun StepIngredientCard(
                             )
                         } else {
                             if (!isLoaded) {
-                                Text("Not Loaded", style = MaterialTheme.typography.labelMedium)
+                                Text(
+                                    text = if (isHindi) "लोड नहीं" else "Not Loaded",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
                             } else {
                                 Icon(
                                     Icons.Outlined.Science,
@@ -784,7 +851,10 @@ private fun StepIngredientCard(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Dispense", style = MaterialTheme.typography.labelMedium)
+                                Text(
+                                    text = if (isHindi) "डिस्पेंस" else "Dispense",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
                             }
                         }
                     }

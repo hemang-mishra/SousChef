@@ -4,6 +4,7 @@ import com.souschef.model.device.BleConnectionState
 import com.souschef.model.device.DispenseResult
 import com.souschef.model.recipe.RecipeStep
 import com.souschef.model.recipe.ResolvedIngredient
+import com.souschef.model.recipe.SupportedLanguages
 
 /**
  * UI state for the step-by-step cooking mode screen.
@@ -40,7 +41,7 @@ data class CookingModeUiState(
     /** Current BLE connection state with the dispenser. */
     val connectionState: BleConnectionState = BleConnectionState.Disconnected,
 
-    /** 
+    /**
      * Set of globalIngredientIds currently loaded in physical compartments.
      * Used to determine if the dispense button should be visible.
      */
@@ -56,5 +57,22 @@ data class CookingModeUiState(
     val dispensingIngredientIds: Set<String> = emptySet(),
 
     /** Most recent dispense result — shown as snackbar / inline feedback. */
-    val lastDispenseResult: DispenseResult? = null
+    val lastDispenseResult: DispenseResult? = null,
+
+    // ── Phase 6: Localization + Narration ────────────────────────────────────
+
+    /** Active language code ("en" / "hi") for instructions + narration. */
+    val language: String = SupportedLanguages.ENGLISH,
+
+    /**
+     * True while a missing translation is being fetched (after the user taps
+     * the Hindi toggle on a recipe that hasn't been translated yet).
+     */
+    val isTranslating: Boolean = false,
+
+    /** True while TTS is actively speaking. */
+    val isSpeaking: Boolean = false,
+
+    /** Set when TTS can't render the requested language locally. */
+    val missingLanguagePack: String? = null
 )

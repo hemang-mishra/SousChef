@@ -45,10 +45,13 @@ class CreateRecipeViewModel(
     private val getIngredientsUseCase: GetIngredientsUseCase,
     private val generateRecipeStepsUseCase: GenerateRecipeStepsUseCase,
     private val saveRecipeStepsUseCase: SaveRecipeStepsUseCase,
+    private val translateRecipeUseCase: com.souschef.usecases.translation.TranslateRecipeUseCase,
     private val recipeRepository: RecipeRepository,
     private val ingredientRepository: IngredientRepository,
     private val storageService: FirebaseStorageService,
     private val voiceToTextParser: com.souschef.util.VoiceToTextParser,
+    /** App-scoped coroutine scope so background translations survive navigation. */
+    private val appScope: kotlinx.coroutines.CoroutineScope,
     private val currentUser: UserProfile,
     private val recipeId: String? = null
 ) : ViewModel() {
@@ -595,6 +598,7 @@ class CreateRecipeViewModel(
             _savedRecipeId.value = finalRecipeId
             _isSaved.value = true
             _isLoading.value = false
+            triggerBackgroundTranslation(finalRecipeId)
             return
         }
 
@@ -604,12 +608,35 @@ class CreateRecipeViewModel(
                     _savedRecipeId.value = finalRecipeId
                     _isSaved.value = true
                     _isLoading.value = false
+                    triggerBackgroundTranslation(finalRecipeId)
                 }
                 is Resource.Failure -> {
                     _isLoading.value = false
                     _generalError.value = result.message ?: "Recipe saved but failed to save steps."
                 }
                 is Resource.Loading -> { /* wait */ }
+            }
+        }
+    }
+
+    /**
+     * Fires off a Hindi translation on the long-lived [appScope] so it
+     * survives the wizard closing. Failures are silently logged — the user
+     * can still tap the language toggle later, which will lazy-translate on
+     * demand.
+     */
+    private fun triggerBackgroundTranslation(finalRecipeId: String) {
+        appScope.launch(Dispatchers.IO) {
+            try {
+                translateRecipeUseCase.execute(
+                    recipeId = finalRecipeId,
+                    targetLanguageCode = com.souschef.model.recipe.SupportedLanguages.HINDI
+                ).collect { /* fire-and-forget */ }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "CreateRecipeVM",
+                    "Background translation failed: ${e.message}"
+                )
             }
         }
     }

@@ -49,4 +49,43 @@ object BleConstants {
 
     /** Units that can be automatically converted to tsp for count calculation. */
     val SUPPORTED_UNITS = setOf("tsp", "tbsp", "ml", "grams", "g")
+
+    /**
+     * Converts [quantity] in [unit] to teaspoons.
+     * Returns `null` if the unit is not supported for auto-conversion.
+     */
+    fun toTsp(quantity: Double, unit: String): Double? {
+        return when (unit.trim().lowercase()) {
+            "tsp"                   -> quantity
+            "tbsp"                  -> quantity * 3.0
+            "ml"                    -> quantity / ML_PER_TSP
+            "grams", "g", "gram"    -> quantity / GRAMS_PER_TSP
+            else                    -> null
+        }
+    }
+
+    /**
+     * Converts [tsp] teaspoons back to [unit].
+     * Returns [tsp] as fallback if unit is not supported.
+     */
+    fun fromTsp(tsp: Double, unit: String): Double {
+        return when (unit.trim().lowercase()) {
+            "tsp"                   -> tsp
+            "tbsp"                  -> tsp / 3.0
+            "ml"                    -> tsp * ML_PER_TSP
+            "grams", "g", "gram"    -> tsp * GRAMS_PER_TSP
+            else                    -> tsp
+        }
+    }
+
+    /**
+     * Rounds a quantity UP to the nearest multiple of 0.25 teaspoons,
+     * maintaining its original unit.
+     */
+    fun roundUpToNearestDispenseStep(quantity: Double, unit: String): Double {
+        val qtyTsp = toTsp(quantity, unit) ?: return quantity
+        val count = kotlin.math.ceil(qtyTsp / TSP_PER_COUNT).coerceAtLeast(1.0)
+        val roundedTsp = count * TSP_PER_COUNT
+        return fromTsp(roundedTsp, unit)
+    }
 }

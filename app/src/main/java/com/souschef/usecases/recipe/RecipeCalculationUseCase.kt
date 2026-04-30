@@ -1,5 +1,6 @@
 package com.souschef.usecases.recipe
 
+import com.souschef.api.ble.BleConstants
 import com.souschef.model.recipe.ResolvedIngredient
 import kotlin.math.roundToInt
 
@@ -56,7 +57,10 @@ class RecipeCalculationUseCase {
                 qty *= (1.0 + sweetnessLevel * ingredient.sweetnessValue / 10.0)
             }
 
-            // 3. Round to 1 decimal place
+            // 3. Round to 1 decimal place, or to hardware steps if dispensible
+            if (ingredient.isDispensable) {
+                qty = BleConstants.roundUpToNearestDispenseStep(qty, ingredient.unit)
+            }
             val rounded = (qty * 10).roundToInt() / 10.0
 
             ingredient.copy(quantity = rounded)
