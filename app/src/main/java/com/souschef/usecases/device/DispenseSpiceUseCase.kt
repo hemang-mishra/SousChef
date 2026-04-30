@@ -64,7 +64,7 @@ class DispenseSpiceUseCase(
         }
 
         // 3. Convert quantity to tsp
-        val qtyTsp = toTsp(quantity, unit)
+        val qtyTsp = BleConstants.toTsp(quantity, unit)
         if (qtyTsp == null) {
             emit(Resource.success(DispenseResult.UnsupportedUnit(unit)))
             return@flow
@@ -109,19 +109,4 @@ class DispenseSpiceUseCase(
         ))
     }
 
-    // ── Unit conversion ───────────────────────────────────────────────────────
-
-    /**
-     * Converts [quantity] in [unit] to teaspoons.
-     * Returns `null` if the unit is not supported for auto-conversion.
-     */
-    private fun toTsp(quantity: Double, unit: String): Double? {
-        return when (unit.trim().lowercase()) {
-            "tsp"                   -> quantity
-            "tbsp"                  -> quantity * 3.0
-            "ml"                    -> quantity / BleConstants.ML_PER_TSP
-            "grams", "g", "gram"    -> quantity / BleConstants.GRAMS_PER_TSP
-            else                    -> null
-        }
-    }
 }

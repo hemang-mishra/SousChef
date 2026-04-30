@@ -5,14 +5,18 @@ import androidx.lifecycle.viewModelScope
 import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.model.recipe.RecipeIngredient
 import com.souschef.model.recipe.ResolvedIngredient
+import com.souschef.model.recipe.SupportedLanguages
 import com.souschef.repository.ingredient.IngredientRepository
 import com.souschef.repository.recipe.RecipeRepository
 import com.souschef.usecases.recipe.RecipeCalculationUseCase
+import com.souschef.usecases.translation.TranslateRecipeUseCase
+import com.souschef.util.LanguageManager
 import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -30,6 +34,8 @@ class RecipeOverviewViewModel(
     private val ingredientRepository: IngredientRepository,
     private val calculationUseCase: RecipeCalculationUseCase,
     private val deleteRecipeUseCase: DeleteRecipeUseCase,
+    private val translateRecipeUseCase: TranslateRecipeUseCase,
+    private val languageManager: LanguageManager,
     private val recipeId: String,
     private val currentUserId: String?
 ) : ViewModel() {
@@ -38,7 +44,74 @@ class RecipeOverviewViewModel(
     val uiState: StateFlow<RecipeOverviewUiState> = _uiState.asStateFlow()
 
     init {
+        observeLanguage()
         loadRecipe()
+    }
+
+    private fun observeLanguage() {
+        viewModelScope.launch {
+            languageManager.currentLanguage.collect { lang ->
+                _uiState.update { it.copy(language = lang) }
+                ensureRecipeTranslated(lang)
+            }
+        }
+    }
+
+    /**
+     * One-tap language switcher used by [com.souschef.ui.components.LanguageToggle].
+     */
+    fun setLanguage(code: String) {
+        languageManager.setLanguage(code)
+    }
+
+    /**
+     * Forces a fresh AI translation for the active (non-English) language,
+     * overwriting any existing localizations.
+     */
+    fun retranslate() {
+        val target = _uiState.value.language
+        if (target == SupportedLanguages.ENGLISH) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isTranslating = true) }
+            try {
+                translateRecipeUseCase.execute(recipeId, target, force = true)
+                    .first { it !is Resource.Loading }
+                loadRecipe()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("RecipeOverviewVM", "Retranslate failed: ${e.message}")
+            } finally {
+                _uiState.update { it.copy(isTranslating = false) }
+            }
+        }
+    }
+
+    /**
+     * Lazily translates the current recipe to [targetLanguage] if needed.
+     * No-op for English (canonical) and for languages already in
+     * `recipe.translatedLanguages`.
+     */
+    private fun ensureRecipeTranslated(targetLanguage: String) {
+        if (targetLanguage == SupportedLanguages.ENGLISH) return
+        val recipe = _uiState.value.recipe ?: return
+        if (targetLanguage in recipe.translatedLanguages) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isTranslating = true) }
+            try {
+                translateRecipeUseCase.execute(recipeId, targetLanguage)
+                    .first { it !is Resource.Loading }
+                // Reload to pick up the new localizations from Firestore.
+                loadRecipe()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("RecipeOverviewVM", "Translation failed: ${e.message}")
+            } finally {
+                _uiState.update { it.copy(isTranslating = false) }
+            }
+        }
     }
 
     // ── Data Loading ────────────────────────────────────────
@@ -119,6 +192,9 @@ class RecipeOverviewViewModel(
                                             isLoading = false
                                         )
                                     }
+                                    // After loading, kick off translation if the
+                                    // active language isn't covered yet.
+                                    ensureRecipeTranslated(_uiState.value.language)
                                 }
                             }
                         }

@@ -84,6 +84,17 @@ class FirebaseRecipeService(
     }
 
     /**
+     * Partial update on a single step document. Used to patch localizations
+     * after AI translation without rewriting the whole sub-collection.
+     */
+    suspend fun updateStep(recipeId: String, stepId: String, updates: Map<String, Any>) {
+        recipesCollection.document(recipeId)
+            .collection("steps")
+            .document(stepId)
+            .update(updates).await()
+    }
+
+    /**
      * Adds a step to the recipe's sub-collection and updates parent recipe metadata.
      */
     suspend fun addStep(recipeId: String, step: RecipeStep) {

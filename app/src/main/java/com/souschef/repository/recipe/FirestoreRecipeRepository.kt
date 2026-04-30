@@ -70,6 +70,16 @@ class FirestoreRecipeRepository(
         emit(result)
     }
 
+    override fun updateStep(
+        recipeId: String,
+        stepId: String,
+        updates: Map<String, Any>
+    ): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        val result = safeFirestoreCall { service.updateStep(recipeId, stepId, updates) }
+        emit(result)
+    }
+
     override fun getSteps(recipeId: String): Flow<Resource<List<RecipeStep>>> = flow {
         emit(Resource.loading())
         val result = safeFirestoreCall { service.getSteps(recipeId) }

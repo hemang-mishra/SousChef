@@ -72,10 +72,32 @@ data class RecipeStep(
      * dropped or surfaced as warnings in the wizard.
      */
     @Deprecated("No longer stored for new steps.")
-    val unresolvedIngredientNames: List<String> = emptyList()
+    val unresolvedIngredientNames: List<String> = emptyList(),
+
+    /**
+     * Map of languageCode → translated copy of this step's user-facing fields.
+     * The canonical [instructionText] / [flameLevel] / [expectedVisualCue]
+     * always hold the English copy. Use [instructionIn] / [flameLevelIn] /
+     * [expectedVisualCueIn] for safe localized reads with an English fallback.
+     */
+    val localizations: Map<String, RecipeStepLocalization> = emptyMap()
 ) {
     /** Resolved effective ingredient ID, with backward-compat fallback. */
     @Suppress("DEPRECATION")
     val effectiveIngredientId: String?
         get() = ingredientId ?: ingredientReferences.firstOrNull()
+
+    /** Localized instruction text, falling back to English. */
+    fun instructionIn(language: String): String =
+        localizations[language]?.instructionText?.takeIf { it.isNotBlank() }
+            ?: instructionText
+
+    /** Localized flame level (e.g. "low" / "धीमी"), falling back to English. */
+    fun flameLevelIn(language: String): String? =
+        localizations[language]?.flameLevel?.takeIf { it.isNotBlank() } ?: flameLevel
+
+    /** Localized expected visual cue, falling back to English. */
+    fun expectedVisualCueIn(language: String): String? =
+        localizations[language]?.expectedVisualCue?.takeIf { it.isNotBlank() }
+            ?: expectedVisualCue
 }

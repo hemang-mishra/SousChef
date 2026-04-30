@@ -3,6 +3,7 @@ package com.souschef.ui.screens.recipe.overview
 import com.souschef.model.recipe.Recipe
 import com.souschef.model.recipe.RecipeStep
 import com.souschef.model.recipe.ResolvedIngredient
+import com.souschef.model.recipe.SupportedLanguages
 
 /**
  * UI state for the Recipe Overview screen.
@@ -22,6 +23,11 @@ data class RecipeOverviewUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val currentUserId: String? = null,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+
+    // ── Phase 6: Localization ────────────────────────────────────────────────
+    val language: String = SupportedLanguages.ENGLISH,
+    /** True while the recipe is being translated on demand for [language]. */
+    val isTranslating: Boolean = false
 )
 

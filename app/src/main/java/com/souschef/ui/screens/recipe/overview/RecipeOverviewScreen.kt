@@ -38,6 +38,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -89,6 +90,8 @@ fun RecipeOverviewScreen(
     RecipeOverviewContent(
         uiState = uiState,
         onBack = onBack,
+        onLanguageChange = viewModel::setLanguage,
+        onRetranslate = viewModel::retranslate,
         onServingsChanged = viewModel::onServingsChanged,
         onSpiceLevelChanged = viewModel::onSpiceLevelChanged,
         onSaltLevelChanged = viewModel::onSaltLevelChanged,
@@ -111,6 +114,8 @@ fun RecipeOverviewScreen(
 fun RecipeOverviewContent(
     uiState: RecipeOverviewUiState,
     onBack: () -> Unit,
+    onLanguageChange: (String) -> Unit = {},
+    onRetranslate: () -> Unit = {},
     onServingsChanged: (Int) -> Unit,
     onSpiceLevelChanged: (Float) -> Unit,
     onSaltLevelChanged: (Float) -> Unit,
@@ -185,6 +190,30 @@ fun RecipeOverviewContent(
                     }
                 },
                 actions = {
+                    com.souschef.ui.components.LanguageToggle(
+                        currentLanguage = uiState.language,
+                        onLanguageChange = onLanguageChange,
+                        modifier = Modifier.padding(end = 6.dp)
+                    )
+                    if (uiState.language != com.souschef.model.recipe.SupportedLanguages.ENGLISH) {
+                        IconButton(
+                            onClick = onRetranslate,
+                            enabled = !uiState.isTranslating
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Outlined.Refresh,
+                                contentDescription = "Retranslate",
+                                tint = AppColors.gold()
+                            )
+                        }
+                    }
+                    if (uiState.isTranslating) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp).padding(end = 8.dp),
+                            color = AppColors.gold(),
+                            strokeWidth = 2.dp
+                        )
+                    }
                     if (showOptions) {
                         IconButton(onClick = { showMenu = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "Options")
@@ -231,7 +260,7 @@ fun RecipeOverviewContent(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 12.dp)
         ) {
-            HeroSection(recipe = recipe)
+            HeroSection(recipe = recipe, language = uiState.language)
 
             ServingSelectorCard(
                 selectedServings = uiState.selectedServings,
@@ -265,10 +294,15 @@ fun RecipeOverviewContent(
 			val dispensable = uiState.adjustedIngredients.filter { it.isDispensable }
 			val manual = uiState.adjustedIngredients.filter { !it.isDispensable }
 
+			val isHindi = uiState.language == com.souschef.model.recipe.SupportedLanguages.HINDI
+
 			if (dispensable.isNotEmpty()) {
-				SectionHeader(title = "Auto-Dispensable")
+				SectionHeader(title = if (isHindi) "स्वतः-डिस्पेंस" else "Auto-Dispensable")
 				Text(
-					text = "These ingredients will be automatically handled by your SousChef dispenser.",
+					text = if (isHindi)
+						"ये सामग्रियाँ आपके SousChef डिस्पेंसर द्वारा स्वतः संचालित होंगी।"
+					else
+						"These ingredients will be automatically handled by your SousChef dispenser.",
 					style = MaterialTheme.typography.bodySmall,
 					color = AppColors.gold(),
 					modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -280,15 +314,18 @@ fun RecipeOverviewContent(
 						.padding(horizontal = 16.dp)
 				) {
 					dispensable.forEach { ingredient ->
-						IngredientQuantityRow(ingredient = ingredient)
+						IngredientQuantityRow(ingredient = ingredient, language = uiState.language)
 					}
 				}
 			}
 
 			if (manual.isNotEmpty()) {
-				SectionHeader(title = "Manual Ingredients")
+				SectionHeader(title = if (isHindi) "मैनुअल सामग्री" else "Manual Ingredients")
 				Text(
-					text = "Quantities update instantly with serving size changes.",
+					text = if (isHindi)
+						"सर्विंग साइज़ बदलते ही मात्राएँ अपडेट हो जाएँगी।"
+					else
+						"Quantities update instantly with serving size changes.",
 					style = MaterialTheme.typography.bodySmall,
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 					modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -300,7 +337,7 @@ fun RecipeOverviewContent(
 						.padding(horizontal = 16.dp)
 				) {
 					manual.forEach { ingredient ->
-						IngredientQuantityRow(ingredient = ingredient)
+						IngredientQuantityRow(ingredient = ingredient, language = uiState.language)
 					}
 				}
 			}
@@ -309,7 +346,10 @@ fun RecipeOverviewContent(
 }
 
 @Composable
-private fun HeroSection(recipe: Recipe) {
+private fun HeroSection(
+    recipe: Recipe,
+    language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -318,7 +358,7 @@ private fun HeroSection(recipe: Recipe) {
         if (!recipe.coverImageUrl.isNullOrBlank()) {
             AsyncImage(
                 model = recipe.coverImageUrl,
-                contentDescription = recipe.title,
+                contentDescription = recipe.titleIn(language),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
@@ -358,7 +398,7 @@ private fun HeroSection(recipe: Recipe) {
                 .padding(16.dp)
         ) {
             Text(
-                text = recipe.title,
+                text = recipe.titleIn(language),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -477,19 +517,70 @@ private fun FlavorCustomizationCard(
                 label = "Spice",
                 emoji = "🌶",
                 level = spiceLevel,
-                onLevelChanged = onSpiceLevelChanged
+                onLevelChanged = onSpiceLevelChanged,
+                activeColor = when {
+                    spiceLevel > 0.6f -> Color(0xFFD32F2F) // Strong Red
+                    spiceLevel > 0.2f -> Color(0xFFF57C00) // Orange
+                    spiceLevel < -0.6f -> Color(0xFF1976D2) // Blue
+                    spiceLevel < -0.2f -> Color(0xFF64B5F6) // Light Blue
+                    else -> MaterialTheme.colorScheme.primary
+                },
+                warningText = when {
+                    spiceLevel > 0.6f -> "Extra Spicy!"
+                    spiceLevel < -0.6f -> "Very Mild!"
+                    else -> null
+                },
+                warningColor = when {
+                    spiceLevel > 0.6f -> Color(0xFFD32F2F)
+                    spiceLevel < -0.6f -> Color(0xFF1976D2)
+                    else -> Color.Transparent
+                }
             )
             FlavorSliderRow(
                 label = "Salt",
                 emoji = "🧂",
                 level = saltLevel,
-                onLevelChanged = onSaltLevelChanged
+                onLevelChanged = onSaltLevelChanged,
+                activeColor = when {
+                    saltLevel > 0.6f -> Color(0xFFD32F2F)
+                    saltLevel > 0.2f -> Color(0xFFF57C00)
+                    saltLevel < -0.6f -> Color(0xFF1976D2)
+                    saltLevel < -0.2f -> Color(0xFF64B5F6)
+                    else -> MaterialTheme.colorScheme.primary
+                },
+                warningText = when {
+                    saltLevel > 0.6f -> "Extra Salty!"
+                    saltLevel < -0.6f -> "Very Low Salt!"
+                    else -> null
+                },
+                warningColor = when {
+                    saltLevel > 0.6f -> Color(0xFFD32F2F)
+                    saltLevel < -0.6f -> Color(0xFF1976D2)
+                    else -> Color.Transparent
+                }
             )
             FlavorSliderRow(
                 label = "Sweetness",
                 emoji = "🍯",
                 level = sweetnessLevel,
-                onLevelChanged = onSweetnessLevelChanged
+                onLevelChanged = onSweetnessLevelChanged,
+                activeColor = when {
+                    sweetnessLevel > 0.6f -> Color(0xFFC2185B) // Pink
+                    sweetnessLevel > 0.2f -> Color(0xFFEC407A) // Light Pink
+                    sweetnessLevel < -0.6f -> Color(0xFF00796B) // Teal
+                    sweetnessLevel < -0.2f -> Color(0xFF4DB6AC) // Light Teal
+                    else -> MaterialTheme.colorScheme.primary
+                },
+                warningText = when {
+                    sweetnessLevel > 0.6f -> "Extra Sweet!"
+                    sweetnessLevel < -0.6f -> "Barely Sweet!"
+                    else -> null
+                },
+                warningColor = when {
+                    sweetnessLevel > 0.6f -> Color(0xFFC2185B)
+                    sweetnessLevel < -0.6f -> Color(0xFF00796B)
+                    else -> Color.Transparent
+                }
             )
         }
     }
@@ -500,18 +591,46 @@ private fun FlavorSliderRow(
     label: String,
     emoji: String,
     level: Float,
-    onLevelChanged: (Float) -> Unit
+    onLevelChanged: (Float) -> Unit,
+    activeColor: Color = MaterialTheme.colorScheme.primary,
+    warningText: String? = null,
+    warningColor: Color = Color.Transparent
 ) {
     Column {
-        Text(
-            text = "$emoji $label",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "$emoji $label",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (warningText != null) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(warningColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = warningText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = warningColor,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
         Slider(
             value = level.toSliderValue(),
             onValueChange = { slider -> onLevelChanged(slider.toFlavorLevel()) },
-            valueRange = 0f..1f
+            valueRange = 0f..1f,
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = activeColor,
+                activeTrackColor = activeColor
+            )
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -537,7 +656,10 @@ private fun FlavorSliderRow(
 }
 
 @Composable
-private fun IngredientQuantityRow(ingredient: ResolvedIngredient) {
+private fun IngredientQuantityRow(
+    ingredient: ResolvedIngredient,
+    language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH
+) {
     val animatedQuantity by animateFloatAsState(
         targetValue = ingredient.quantity.toFloat(),
         label = "ingredient_${ingredient.globalIngredientId}"
@@ -568,7 +690,7 @@ private fun IngredientQuantityRow(ingredient: ResolvedIngredient) {
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = ingredient.name,
+                    text = ingredient.nameIn(language),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -577,7 +699,7 @@ private fun IngredientQuantityRow(ingredient: ResolvedIngredient) {
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "${animatedQuantity.toOneDecimalString()} ${ingredient.unit}",
+                text = "${animatedQuantity.toOneDecimalString()} ${ingredient.unitIn(language)}",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -646,5 +768,4 @@ private fun RecipeOverviewContentPreview() {
         )
     }
 }
-
 
