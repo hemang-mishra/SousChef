@@ -1,8 +1,9 @@
 package com.souschef.service.ingredient
 
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.Source
 import com.souschef.model.ingredient.GlobalIngredient
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -45,9 +46,9 @@ class FirebaseIngredientService(
     /**
      * Fetches a single ingredient by ID.
      */
-    suspend fun getIngredient(ingredientId: String): GlobalIngredient? {
+    suspend fun getIngredient(ingredientId: String, source: Source = Source.DEFAULT): GlobalIngredient? {
         return ingredientsCollection.document(ingredientId)
-            .get().await()
+            .get(source).await()
             .toObject(GlobalIngredient::class.java)
     }
 
@@ -72,13 +73,13 @@ class FirebaseIngredientService(
      * Fetches multiple ingredients by their IDs.
      * Useful for resolving RecipeIngredient references.
      */
-    suspend fun getIngredientsByIds(ids: List<String>): List<GlobalIngredient> {
+    suspend fun getIngredientsByIds(ids: List<String>, source: Source = Source.DEFAULT): List<GlobalIngredient> {
         if (ids.isEmpty()) return emptyList()
         // Firestore whereIn supports max 30 items per query
         return ids.chunked(30).flatMap { chunk ->
             ingredientsCollection
                 .whereIn(FieldPath.documentId(), chunk)
-                .get().await()
+                .get(source).await()
                 .toObjects(GlobalIngredient::class.java)
         }
     }

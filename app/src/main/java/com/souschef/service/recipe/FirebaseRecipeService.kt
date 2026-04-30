@@ -3,6 +3,7 @@ package com.souschef.service.recipe
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.Source
 import com.souschef.model.recipe.Recipe
 import com.souschef.model.recipe.RecipeStep
 import kotlinx.coroutines.channels.awaitClose
@@ -39,9 +40,9 @@ class FirebaseRecipeService(
     /**
      * Fetches a single recipe by ID.
      */
-    suspend fun getRecipe(recipeId: String): Recipe? {
+    suspend fun getRecipe(recipeId: String, source: Source = Source.DEFAULT): Recipe? {
         return recipesCollection.document(recipeId)
-            .get().await()
+            .get(source).await()
             .toObject(Recipe::class.java)
     }
 
@@ -114,20 +115,20 @@ class FirebaseRecipeService(
     /**
      * Fetches all steps for a recipe, ordered by stepNumber.
      */
-    suspend fun getSteps(recipeId: String): List<RecipeStep> {
+    suspend fun getSteps(recipeId: String, source: Source = Source.DEFAULT): List<RecipeStep> {
         return recipesCollection.document(recipeId)
             .collection("steps")
             .orderBy("stepNumber")
-            .get().await()
+            .get(source).await()
             .toObjects(RecipeStep::class.java)
     }
 
     /**
      * Fetches recipe document and steps in one call path for overview screens.
      */
-    suspend fun getRecipeWithSteps(recipeId: String): Pair<Recipe?, List<RecipeStep>> {
-        val recipe = getRecipe(recipeId)
-        val steps = getSteps(recipeId)
+    suspend fun getRecipeWithSteps(recipeId: String, source: Source = Source.DEFAULT): Pair<Recipe?, List<RecipeStep>> {
+        val recipe = getRecipe(recipeId, source)
+        val steps = getSteps(recipeId, source)
         return recipe to steps
     }
 
