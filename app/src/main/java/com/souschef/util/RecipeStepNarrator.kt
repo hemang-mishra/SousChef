@@ -35,6 +35,10 @@ object RecipeStepNarrator {
      * @param language       Active language code ("en" / "hi").
      * @param autoTimerStarted If true, append a sentence telling the user the
      *                         timer has just started automatically.
+     * @param dispensableAvailable If true, append a prompt telling the user
+     *                             that this step's ingredient is loaded into
+     *                             the SousChef Dispenser and they can tap
+     *                             the on-screen button to dispense it.
      */
     fun build(
         step: RecipeStep,
@@ -42,7 +46,8 @@ object RecipeStepNarrator {
         totalSteps: Int,
         ingredient: ResolvedIngredient?,
         language: String,
-        autoTimerStarted: Boolean = false
+        autoTimerStarted: Boolean = false,
+        dispensableAvailable: Boolean = false
     ): String {
         val sb = StringBuilder()
 
@@ -73,8 +78,33 @@ object RecipeStepNarrator {
             sb.append(' ').append(visualCueLine(cue, stepIndex, language))
         }
 
+        if (dispensableAvailable) {
+            sb.append(' ').append(dispensableAvailableSentence(stepIndex, language))
+        }
+
         return sb.toString().trim()
     }
+
+    /**
+     * Spoken when the active step's ingredient is currently loaded in the
+     * physical SousChef Dispenser. Surfaces the auto-dispense affordance
+     * out loud so the user doesn't have to look at the screen to know it's
+     * available.
+     */
+    fun dispensableAvailableAnnouncement(language: String): String =
+        dispensableAvailableSentence(0, language)
+
+    /**
+     * Spoken the moment the user taps the Dispense button. Confirms the
+     * action by ingredient name and tells them to grab it from the machine.
+     */
+    fun dispensingAnnouncement(ingredientName: String, language: String): String =
+        when (language) {
+            SupportedLanguages.HINDI ->
+                "$ingredientName dispense ho raha hai — machine se nikaal ke pakaane mein use kijiye."
+            else ->
+                "$ingredientName is being dispensed. Please collect it from the machine and use it for cooking."
+        }
 
     /**
      * Short utterance announcing that a timer has just started. Useful when
@@ -261,6 +291,22 @@ object RecipeStepNarrator {
                 "Keep an eye out — $cleaned.",
                 "You'll know it's ready when $cleaned.",
                 "Watch for this: $cleaned."
+            )
+        }
+        return variants.pickFor(stepIndex)
+    }
+
+    private fun dispensableAvailableSentence(stepIndex: Int, language: String): String {
+        val variants = when (language) {
+            SupportedLanguages.HINDI -> listOf(
+                "Yeh ingredient smart dispenser hardware mein available hai — screen par dispense button dabaiye.",
+                "Aapke hardware dispenser mein yeh ingredient ready hai. Screen par dispense button dabaiye aur nikaaliye.",
+                "Machine hardware mein yeh ingredient majood hai — dispense karne ke liye screen par button dabaiye."
+            )
+            else -> listOf(
+                "This ingredient is available to dispense from your smart hardware — press the button on the screen and it'll dispense automatically.",
+                "Good news — this one is available in the hardware dispenser. Just press the on-screen button to dispense it.",
+                "The hardware dispenser has this ingredient ready. Press the screen button and the machine will handle the rest."
             )
         }
         return variants.pickFor(stepIndex)
