@@ -97,7 +97,7 @@ fun HomeScreenLayout(
     ) {
         // ── Greeting Header ──────────────────────────────
         item {
-            GreetingHeader(userName = uiState.userName, translatedGreeting = uiState.translatedGreeting)
+            GreetingHeader(userName = uiState.userName)
         }
 
         // ── Search Bar ───────────────────────────────────
@@ -111,7 +111,7 @@ fun HomeScreenLayout(
                     .padding(bottom = 12.dp),
                 placeholder = {
                     Text(
-                        uiState.translatedSearchPlaceholder,
+                        "Search your recipes…",
                         style = MaterialTheme.typography.bodyMedium,
                         color = AppColors.textTertiary()
                     )
@@ -158,8 +158,8 @@ fun HomeScreenLayout(
             item {
                 if (uiState.recipes.isEmpty()) {
                     EmptyStateView(
-                        title = uiState.translatedEmptyTitle,
-                        subtitle = uiState.translatedEmptySubtitle,
+                        title = "No recipes yet",
+                        subtitle = "Create your first recipe and let AI generate the cooking steps!",
                         icon = Icons.Outlined.Restaurant,
                         actionLabel = "Create Recipe",
                         onAction = onCreateRecipe,
@@ -198,7 +198,7 @@ fun HomeScreenLayout(
 // ── Greeting Header ──────────────────────────────────────
 
 @Composable
-private fun GreetingHeader(userName: String, translatedGreeting: String = "Welcome back,") {
+private fun GreetingHeader(userName: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -224,7 +224,7 @@ private fun GreetingHeader(userName: String, translatedGreeting: String = "Welco
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    text = if (userName.isNotBlank()) translatedGreeting else "Welcome!",
+                    text = if (userName.isNotBlank()) "Welcome back," else "Welcome!",
                     style = MaterialTheme.typography.bodyMedium,
                     color = AppColors.textSecondary()
                 )

@@ -19,11 +19,5 @@ data class HomeUiState(
     /** User's display name. */
     val userName: String = "",
     /** Error message, null if none. */
-    val error: String? = null,
-
-    // Translated UI strings
-    val translatedGreeting: String = "Welcome back,",
-    val translatedSearchPlaceholder: String = "Search your recipes…",
-    val translatedEmptyTitle: String = "No recipes yet",
-    val translatedEmptySubtitle: String = "Create your first recipe and let AI generate the cooking steps!"
+    val error: String? = null
 )
