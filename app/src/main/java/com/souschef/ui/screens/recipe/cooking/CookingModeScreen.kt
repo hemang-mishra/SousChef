@@ -452,26 +452,32 @@ private fun StepContent(
     onResetTimer: () -> Unit,
     onDispense: (String, String, Double, String) -> Unit
 ) {
+    val hasTimer = step.timerSeconds != null && step.timerSeconds > 0
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Main step card
+        // Step number + type pill — kept tiny and above everything so the
+        // user always knows where they are without it stealing space.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            StepNumberBadge(stepNumber = stepIndex + 1)
+            StepTypeBadge(stepType = step.stepType)
+        }
+
+
+        // ── Instruction zone ───────────────────────────────────────────
+        // The long-form copy lives below. The user can scroll into this if
+        // they want to re-read it; otherwise they hear it via narration
+        // and operate the timer / dispense from above-the-fold.
         GlassCard {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Step number badge + type indicator
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    StepNumberBadge(stepNumber = stepIndex + 1)
-                    StepTypeBadge(stepType = step.stepType)
-                }
-
-                // Instruction text (localized)
                 Text(
                     text = step.instructionIn(language),
                     style = MaterialTheme.typography.bodyLarge,
@@ -479,7 +485,6 @@ private fun StepContent(
                     lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.3f
                 )
 
-                // Flame level (canonical English drives icons; localized label shown via FlameLevelIndicator)
                 step.flameLevel?.takeIf { it.isNotBlank() }?.let { canonical ->
                     FlameLevelIndicator(
                         level = canonical,
@@ -487,19 +492,33 @@ private fun StepContent(
                     )
                 }
 
-                // Visual cue (localized)
                 step.expectedVisualCueIn(language)?.takeIf { it.isNotBlank() }?.let { cue ->
                     VisualCueRow(cue = cue, language = language)
                 }
 
-                // Media
                 if (!step.mediaUrl.isNullOrBlank()) {
                     MediaSection(mediaUrl = step.mediaUrl, mediaType = step.mediaType)
                 }
             }
         }
 
-        // Ingredient card for this step (single ingredient with dynamic quantity)
+        // ── Action zone ────────────────────────────────────────────────
+        // Timer + ingredient/dispense are the *interactive* parts of the
+        // screen and need to be reachable without scrolling. We render
+        // them BEFORE the long instruction card so they always sit above
+        // the fold even when the recipe instruction wraps to many lines.
+        if (hasTimer) {
+            TimerSection(
+                timerMillisRemaining = timerMillisRemaining,
+                isTimerRunning = isTimerRunning,
+                timerFinished = timerFinished,
+                language = language,
+                onStart = onStartTimer,
+                onPause = onPauseTimer,
+                onReset = onResetTimer
+            )
+        }
+
         if (stepIngredient != null) {
             val isLoadedById = loadedCompartmentIngredientIds.contains(stepIngredient.globalIngredientId)
             val isLoadedByName = loadedCompartmentIngredientNames.any {
@@ -507,7 +526,6 @@ private fun StepContent(
             }
             val isLoaded = isLoadedById || isLoadedByName
 
-            // Generate visual debug information
             val debugText = StringBuilder().apply {
                 append("ID: ${stepIngredient.globalIngredientId}\n")
                 append("Name: ${stepIngredient.name}\n")
@@ -531,19 +549,6 @@ private fun StepContent(
                         stepIngredient.unit
                     )
                 }
-            )
-        }
-
-        // Timer section
-        if (step.timerSeconds != null && step.timerSeconds > 0) {
-            TimerSection(
-                timerMillisRemaining = timerMillisRemaining,
-                isTimerRunning = isTimerRunning,
-                timerFinished = timerFinished,
-                language = language,
-                onStart = onStartTimer,
-                onPause = onPauseTimer,
-                onReset = onResetTimer
             )
         }
 

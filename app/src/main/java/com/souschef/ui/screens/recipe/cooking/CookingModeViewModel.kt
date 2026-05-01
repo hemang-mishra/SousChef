@@ -358,6 +358,7 @@ class CookingModeViewModel(
         val language = languageManager.currentLanguage.value
         val timerSecs = step.timerSeconds
         val willAutoStartTimer = timerSecs != null && timerSecs > 0
+        val ingredientLoadedInDispenser = ingredient != null && isIngredientLoaded(ingredient)
 
         val narration = RecipeStepNarrator.build(
             step = step,
@@ -365,7 +366,8 @@ class CookingModeViewModel(
             totalSteps = steps.size,
             ingredient = ingredient,
             language = language,
-            autoTimerStarted = willAutoStartTimer
+            autoTimerStarted = willAutoStartTimer,
+            dispensableAvailable = ingredientLoadedInDispenser
         )
         ttsService.stop()
         ttsService.speak(narration, language)
@@ -428,6 +430,21 @@ class CookingModeViewModel(
         quantity: Double,
         unit: String
     ) {
+        // Speak a confirmation as soon as the user taps Dispense. Prefer the
+        // localized ingredient name from the active step's resolved
+        // ingredient when we have it, otherwise fall back to the canonical
+        // English name passed by the caller.
+        val language = languageManager.currentLanguage.value
+        val spokenName = _stepIngredientMap.value.values
+            .firstOrNull { it.globalIngredientId == globalIngredientId }
+            ?.nameIn(language)
+            ?: ingredientName
+        ttsService.stop()
+        ttsService.speak(
+            RecipeStepNarrator.dispensingAnnouncement(spokenName, language),
+            language
+        )
+
         viewModelScope.launch(Dispatchers.IO) {
             _dispensingIds.update { it + globalIngredientId }
 
@@ -544,9 +561,25 @@ class CookingModeViewModel(
             totalSteps = state.steps.size,
             ingredient = ingredient,
             language = state.language,
-            autoTimerStarted = false
+            autoTimerStarted = false,
+            dispensableAvailable = ingredient != null && isIngredientLoaded(ingredient)
         )
         ttsService.speak(text, state.language)
+    }
+
+    /**
+     * Mirrors the logic the cooking-mode screen uses to decide whether to
+     * show the Dispense button — matches by global ingredient ID first, and
+     * falls back to a fuzzy lowercase name match for legacy compartments
+     * that don't have an ID populated.
+     */
+    private fun isIngredientLoaded(ingredient: ResolvedIngredient): Boolean {
+        val id = ingredient.globalIngredientId
+        if (id.isNotBlank() && _loadedCompartmentIngredientIds.value.contains(id)) return true
+        val lowered = ingredient.name.lowercase()
+        return _loadedCompartmentIngredientNames.value.any { loaded ->
+            lowered.contains(loaded) || loaded.contains(lowered)
+        }
     }
 
     private fun ensureRecipeTranslated(targetLanguage: String) {
@@ -584,7 +617,7 @@ class CookingModeViewModel(
          * the TTS engine room to deliver the full step intro plus the
          * "I've started a timer" line before the count begins.
          */
-        private const val AUTO_TIMER_START_DELAY_MS = 5000L
+        private const val AUTO_TIMER_START_DELAY_MS = 12000L
     }
 
     private suspend fun reloadAfterTranslation() {
