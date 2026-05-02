@@ -23,7 +23,11 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.souschef.model.auth.UserProfile
 import com.souschef.ui.components.AppNavigationShimmer
+import com.souschef.ui.components.OfflineBanner
 import com.souschef.ui.components.SousChefBottomNavBar
+import com.souschef.ui.components.StartupPermissionGate
+import com.souschef.ui.screens.admin.AdminDashboardScreen
+import com.souschef.ui.screens.admin.AdminViewModel
 import com.souschef.ui.screens.auth.login.LoginScreen
 import com.souschef.ui.screens.auth.signup.SignUpScreen
 import com.souschef.ui.screens.designtest.DesignTestScreen
@@ -32,8 +36,9 @@ import com.souschef.ui.screens.home.HomeViewModel
 import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientScreen
 import com.souschef.ui.screens.ingredient.addedit.AddEditIngredientViewModel
 import com.souschef.ui.screens.ingredient.library.IngredientLibraryScreen
-import com.souschef.ui.screens.profile.ProfileScreen
 import com.souschef.ui.screens.recipe.cooking.CookingModeScreen
+import com.souschef.ui.screens.settings.SettingsScreen
+import com.souschef.ui.screens.settings.SettingsViewModel
 import com.souschef.ui.screens.recipe.cooking.CookingModeViewModel
 import com.souschef.ui.screens.recipe.create.CreateRecipeScreen
 import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
@@ -103,8 +108,11 @@ fun AppNavigation() {
     }
 
     val currentRoute = backstack.lastOrNull() as? Screens
+    val isOffline by appViewModel.isOffline.collectAsState()
 
+    StartupPermissionGate(enabled = isLoggedIn) {
     Scaffold(
+        topBar = { OfflineBanner(isOffline = isOffline) },
         bottomBar = {
             if (showBottomNav) {
                 SousChefBottomNavBar(
@@ -177,10 +185,10 @@ fun AppNavigation() {
                 // ── Home (Phase 7) ───────────────────────────
                 entry<Screens.NavHomeRoute> {
                     val currentUser by appViewModel.currentUser.collectAsState()
-                    val preferredLang by appViewModel.preferredLanguageCode.collectAsState()
                     val user = currentUser ?: UserProfile()
-                    val homeViewModel: HomeViewModel = koinInject {
-                        parametersOf(user.uid, user.displayName, preferredLang)
+                    val homeViewModel: HomeViewModel = koinInject()
+                    LaunchedEffect(user.uid, user.displayName) {
+                        homeViewModel.bind(user.uid, user.displayName)
                     }
                     HomeScreen(
                         viewModel = homeViewModel,
@@ -217,15 +225,19 @@ fun AppNavigation() {
                     )
                 }
 
-                // ── Profile (Phase 7) ────────────────────────
+                // ── Unified Settings (replaces Profile) ─────────
                 entry<Screens.NavProfileRoute> {
                     val currentUser by appViewModel.currentUser.collectAsState()
-                    val preferredLang by appViewModel.preferredLanguageCode.collectAsState()
-                    ProfileScreen(
-                        userProfile = currentUser,
-                        preferredLanguageCode = preferredLang,
-                        onSetPreferredLanguage = { code -> appViewModel.setPreferredLanguage(code) },
-                        onSignOut = { appViewModel.signOut() }
+                    val isAdmin by appViewModel.isAdmin.collectAsState()
+                    val viewModel: SettingsViewModel = koinInject { parametersOf(currentUser) }
+                    LaunchedEffect(currentUser) { viewModel.setProfile(currentUser) }
+                    SettingsScreen(
+                        viewModel = viewModel,
+                        isAdmin = isAdmin,
+                        onSignOut = { appViewModel.signOut() },
+                        onOpenIngredientLibrary = { backstack.add(Screens.NavIngredientLibraryRoute) },
+                        onOpenHardwareTest = { backstack.add(Screens.NavHardwareTestRoute) },
+                        onOpenAdmin = { backstack.add(Screens.NavAdminRoute) }
                     )
                 }
 
@@ -300,8 +312,7 @@ fun AppNavigation() {
                     )
                 }
 
-                // ── Recipe Detail / Overview (Phase 3) ───────
-                entry<Screens.NavRecipeDetailRoute> { PlaceholderScreen("Recipe Detail — Phase 3") }
+                // ── Recipe Overview ──────────────────────────
                 entry<Screens.NavRecipeOverviewRoute> { route ->
                     val currentUser = appViewModel.currentUser.value ?: UserProfile()
                     val viewModel: RecipeOverviewViewModel = koinInject { parametersOf(route.recipeId, currentUser) }
@@ -344,10 +355,19 @@ fun AppNavigation() {
                 // ── AI Step Generation (Phase 6) — now integrated into CreateRecipeRoute ──
 
                 // ── Admin (Phase 8) ──────────────────────────
-                entry<Screens.NavAdminRoute> { PlaceholderScreen("Admin Panel — Phase 8") }
+                entry<Screens.NavAdminRoute> {
+                    val isAdmin by appViewModel.isAdmin.collectAsState()
+                    val viewModel: AdminViewModel = koinInject()
+                    AdminDashboardScreen(
+                        viewModel = viewModel,
+                        isAdmin = isAdmin,
+                        onBack = { if (backstack.size > 1) backstack.removeAt(backstack.size - 1) }
+                    )
+                }
             }
         )
     }
+    } // close StartupPermissionGate
 }
 
 @Composable

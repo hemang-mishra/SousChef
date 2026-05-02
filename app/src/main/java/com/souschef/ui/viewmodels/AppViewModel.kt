@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.souschef.model.auth.UserProfile
 import com.souschef.preferences.AppPreferences
 import com.souschef.repository.auth.AuthRepository
+import com.souschef.repository.recipe.RecipeListCache
+import com.souschef.util.ConnectivityObserver
+import com.souschef.util.NetworkStatus
 import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,8 +27,15 @@ import kotlinx.coroutines.launch
  */
 class AppViewModel(
     private val authRepository: AuthRepository,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    connectivityObserver: ConnectivityObserver,
+    private val recipeListCache: RecipeListCache
 ) : ViewModel() {
+
+    /** True when the device is currently disconnected from the internet. */
+    val isOffline: StateFlow<Boolean> = connectivityObserver.networkStatus
+        .map { it == NetworkStatus.Unavailable }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val _currentUser = MutableStateFlow<UserProfile?>(null)
     val currentUser: StateFlow<UserProfile?> = _currentUser
@@ -97,6 +107,7 @@ class AppViewModel(
 
     fun signOut() {
         viewModelScope.launch(Dispatchers.IO) {
+            recipeListCache.clear()
             authRepository.signOut().collect { /* result handled by auth state observer */ }
         }
     }

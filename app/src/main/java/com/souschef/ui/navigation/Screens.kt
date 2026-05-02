@@ -25,7 +25,6 @@ sealed interface Screens : NavKey {
 
     // ── Recipe (Phase 2+) ─────────────────────────────────
     @Serializable data class NavCreateRecipeRoute(val recipeId: String? = null) : Screens
-    @Serializable data class NavRecipeDetailRoute(val recipeId: String) : Screens
     @Serializable data class NavRecipeOverviewRoute(val recipeId: String) : Screens
     @Serializable data class NavCookingModeRoute(
         val recipeId: String,

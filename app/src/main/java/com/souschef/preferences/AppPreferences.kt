@@ -3,6 +3,7 @@ package com.souschef.preferences
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -42,6 +43,7 @@ class AppPreferences(private val context: Context) {
         private val CACHED_USER_UID   = stringPreferencesKey("cached_user_uid")
         private val COMPARTMENTS_JSON = stringPreferencesKey("dispenser_compartments")
         private val PREFERRED_LANGUAGE_CODE = stringPreferencesKey("preferred_lang_code")
+        private val STARTUP_PERMISSIONS_REQUESTED = booleanPreferencesKey("startup_permissions_requested")
     }
 
     // ── Auth / sync ───────────────────────────────────────────────────────────
@@ -134,6 +136,29 @@ class AppPreferences(private val context: Context) {
         }
 
         override suspend fun get(): String? = getFlow().first()
+    }
+
+    // ── Startup permission gate ──────────────────────────────────────────────
+
+    /**
+     * `true` once we've asked the user for runtime permissions (BLE + notifications)
+     * on first launch. Gates the [com.souschef.ui.components.StartupPermissionGate]
+     * so we don't repeatedly prompt.
+     */
+    val startupPermissionsRequested: DataStorePreference<Boolean> = object : DataStorePreference<Boolean> {
+        override fun getFlow(): Flow<Boolean> =
+            context.dataStore.data
+                .catch { emit(emptyPreferences()) }
+                .map { it[STARTUP_PERMISSIONS_REQUESTED] ?: false }
+                .distinctUntilChanged()
+
+        override suspend fun set(value: Boolean) {
+            context.dataStore.edit { prefs ->
+                prefs[STARTUP_PERMISSIONS_REQUESTED] = value
+            }
+        }
+
+        override suspend fun get(): Boolean = getFlow().first()
     }
 
     // ── Global helpers ────────────────────────────────────────────────────────

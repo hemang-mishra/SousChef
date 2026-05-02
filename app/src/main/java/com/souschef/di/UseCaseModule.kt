@@ -9,12 +9,15 @@ import com.souschef.usecases.ingredient.GetIngredientsUseCase
 import com.souschef.usecases.ingredient.UpdateGlobalIngredientUseCase
 import com.souschef.usecases.recipe.CreateRecipeUseCase
 import com.souschef.usecases.recipe.DeleteRecipeUseCase
+import com.souschef.usecases.recipe.ForkRecipeUseCase
 import com.souschef.usecases.recipe.GenerateRecipeStepsUseCase
 import com.souschef.usecases.recipe.PublishRecipeUseCase
 import com.souschef.usecases.recipe.RecipeCalculationUseCase
 import com.souschef.usecases.recipe.SaveRecipeStepsUseCase
+import com.souschef.usecases.recipe.ToggleSavedRecipeUseCase
 import com.souschef.usecases.recipe.UpdateRecipeUseCase
 import com.souschef.usecases.translation.TranslateRecipeUseCase
+import org.koin.android.ext.koin.androidApplication
 import org.koin.dsl.module
 
 /**
@@ -31,6 +34,13 @@ val useCaseModule = module {
     /** Now takes IngredientRepository as 2nd arg for fuzzy matching. */
     single { GenerateRecipeStepsUseCase(get(), get()) }
 
+    // ── Phase 7: Fork / Save ──────────────────────────────────────────────────
+    single { ForkRecipeUseCase(get()) }
+    single { ToggleSavedRecipeUseCase(get()) }
+
+    // ── Phase 8: Admin ────────────────────────────────────────────────────────
+    single { com.souschef.usecases.admin.ChefVerificationUseCase(get()) }
+
     // ── Translation (multi-language) ──────────────────────────────────────────
     single { TranslateRecipeUseCase(get(), get(), get()) }
 
@@ -43,5 +53,5 @@ val useCaseModule = module {
     single { GetCompartmentsUseCase(get()) }
     single { UpdateCompartmentUseCase(get()) }
     single { RefillCompartmentUseCase(get()) }
-    single { DispenseSpiceUseCase(get(), get()) }
+    single { DispenseSpiceUseCase(get(), get(), androidApplication()) }
 }

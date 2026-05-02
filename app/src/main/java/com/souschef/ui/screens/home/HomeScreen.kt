@@ -84,7 +84,9 @@ fun HomeScreenLayout(
     onGenerateSteps: (String) -> Unit,
     onCreateRecipe: () -> Unit
 ) {
-    if (uiState.isLoading && uiState.recipes.isEmpty()) {
+    // Show shimmer only on cold start. When cache exists we render
+    // the list immediately and refresh in the background.
+    if (uiState.isLoading && uiState.recipes.isEmpty() && uiState.error == null) {
         RecipeListShimmer()
         return
     }

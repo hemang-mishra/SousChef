@@ -12,6 +12,7 @@ import com.souschef.ui.screens.recipe.cooking.CookingModeViewModel
 import com.souschef.ui.screens.recipe.create.CreateRecipeViewModel
 import com.souschef.ui.screens.recipe.overview.RecipeOverviewViewModel
 import com.souschef.ui.screens.savedrecipes.SavedRecipesViewModel
+import com.souschef.ui.screens.settings.SettingsViewModel
 import com.souschef.ui.viewmodels.AppViewModel
 import org.koin.dsl.module
 
@@ -25,16 +26,14 @@ import org.koin.dsl.module
  */
 val viewModelModule = module {
     // App-level — single (survives navigation)
-    single { AppViewModel(get(), get()) }
+    single { AppViewModel(get(), get(), get(), get()) }
 
     // Auth screens — factory (fresh per navigation)
     factory { LoginViewModel(get()) }
     factory { SignUpViewModel(get()) }
 
-    // Home — factory, needs userId + userName
-    factory { (userId: String, userName: String, preferredLang: String?) ->
-        HomeViewModel(get(), userId, userName, preferredLang)
-    }
+    // Home — single (cached across navigations); rebinds via .bind(userId, userName)
+    single { HomeViewModel(get(), get()) }
     factory { (userId: String, userName: String) ->
         SavedRecipesViewModel(get(), userId, userName)
     }
@@ -83,4 +82,12 @@ val viewModelModule = module {
 
     // Hardware Test
     factory { HardwareTestViewModel(get()) }
+
+    // ── Unified Settings ──────────────────────────────────────────────────────
+    factory { (profile: com.souschef.model.auth.UserProfile?) ->
+        SettingsViewModel(get(), get(), get(), profile)
+    }
+
+    // ── Phase 8: Admin ────────────────────────────────────────────────────────
+    factory { com.souschef.ui.screens.admin.AdminViewModel(get(), get(), get()) }
 }

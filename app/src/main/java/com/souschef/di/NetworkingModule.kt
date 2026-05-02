@@ -5,6 +5,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.MemoryCacheSettings
 import com.google.firebase.firestore.PersistentCacheSettings
+import com.souschef.util.ConnectivityObserver
+import org.koin.android.ext.koin.androidApplication
 import org.koin.dsl.module
 
 /**
@@ -23,5 +25,8 @@ val networkingModule = module {
     }
 
     single { FirebaseAuth.getInstance() }
+
+    /** Process-scoped network observer for the offline banner. */
+    single { ConnectivityObserver(androidApplication()) }
 }
 

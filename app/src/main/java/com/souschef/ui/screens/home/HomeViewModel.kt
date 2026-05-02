@@ -3,8 +3,10 @@ package com.souschef.ui.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.ui.components.RecipeWithMeta
+import com.souschef.repository.recipe.RecipeListCache
 import com.souschef.repository.recipe.RecipeRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,27 +16,50 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for the Home screen.
  * Loads the current user's recipes and supports search + tag filtering.
+ *
+ * Registered as `single` in Koin so the loaded list survives navigation between
+ * tabs — combined with [RecipeListCache] for instant first paint after sign-in
+ * or a cold-start.
  */
 class HomeViewModel(
     private val recipeRepository: RecipeRepository,
-    private val userId: String,
-    private val userName: String,
-    private val preferredLanguageCode: String? = null
+    private val recipeListCache: RecipeListCache
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState(userName = userName))
+    private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    init {
+    private var loadJob: Job? = null
+    private var currentUserId: String? = null
+
+    /**
+     * Bind the ViewModel to the currently signed-in user. Safe to call on every
+     * Home composition — re-binding is a no-op when the user hasn't changed.
+     */
+    fun bind(userId: String, userName: String) {
+        if (userId == currentUserId && userName == _uiState.value.userName) {
+            return
+        }
+        currentUserId = userId
+        _uiState.update { it.copy(userName = userName) }
         loadRecipes()
     }
 
+    /** Clear cached state when signing out. */
+    fun reset() {
+        loadJob?.cancel()
+        currentUserId = null
+        _uiState.value = HomeUiState()
+    }
+
     private fun loadRecipes() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isLoading = true) }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch(Dispatchers.IO) {
+            // Show shimmer only if there's nothing cached yet
+            val cached = recipeListCache.allRecipes.value
+            _uiState.update { it.copy(isLoading = cached.isNullOrEmpty()) }
 
             try {
-                // Fetch all recipes using the real-time listener
                 recipeRepository.getAllRecipes().collect { recipes ->
                     // Filter down to only those with steps
                     val recipesWithSteps = recipes.filter { it.hasSteps }
