@@ -730,7 +730,21 @@ private fun IngredientQuantityRow(
     }
 }
 
-private fun Float.toOneDecimalString(): String = ((this * 10f).roundToInt() / 10f).toString()
+/**
+ * Renders an animated quantity with up to two decimal places, stripping
+ * trailing zeros. Dispensable ingredients are snapped to 0.25-tsp
+ * multiples (0.25 / 0.5 / 0.75) and we want the user to see the exact
+ * dispensed value (e.g. "0.75") instead of "0.8".
+ */
+private fun Float.toOneDecimalString(): String {
+    val rounded = (this * 100f).roundToInt() / 100f
+    return when {
+        rounded == rounded.toLong().toFloat() -> rounded.toLong().toString()
+        (rounded * 10f) == (rounded * 10f).toLong().toFloat() ->
+            "%.1f".format(rounded)
+        else -> "%.2f".format(rounded)
+    }
+}
 
 private fun Float.toSliderValue(): Float = ((this + 1f) / 2f).coerceIn(0f, 1f)
 

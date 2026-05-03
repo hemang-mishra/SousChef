@@ -36,7 +36,7 @@ class RecipeCalculationUseCase {
         sweetnessLevel: Float = 0f
     ): List<ResolvedIngredient> {
         return ingredients.map { ingredient ->
-            
+
             val ppq = if (ingredient.perPersonQuantity > 0.0) {
                 ingredient.perPersonQuantity
             } else {
@@ -57,11 +57,15 @@ class RecipeCalculationUseCase {
                 qty *= (1.0 + sweetnessLevel * ingredient.sweetnessValue / 10.0)
             }
 
-            // 3. Round to 1 decimal place, or to hardware steps if dispensible
-            if (ingredient.isDispensable) {
-                qty = BleConstants.roundUpToNearestDispenseStep(qty, ingredient.unit)
+            // 3. Round to hardware-aligned 0.25 multiples for dispensable
+            //    ingredients (so the displayed value matches what the
+            //    machine actually ejects), otherwise keep one decimal of
+            //    precision for normal ingredients.
+            val rounded = if (ingredient.isDispensable) {
+                BleConstants.roundUpToNearestDispenseStep(qty, ingredient.unit)
+            } else {
+                (qty * 10).roundToInt() / 10.0
             }
-            val rounded = (qty * 10).roundToInt() / 10.0
 
             ingredient.copy(quantity = rounded)
         }

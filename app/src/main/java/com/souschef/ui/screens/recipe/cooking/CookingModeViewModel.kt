@@ -362,12 +362,17 @@ class CookingModeViewModel(
                 }
 
                 if (ingredient != null) {
-                    // Apply quantityMultiplier for step-specific amount
-                    var stepQty = ingredient.quantity * step.quantityMultiplier
-                    if (ingredient.isDispensable) {
-                        stepQty = com.souschef.api.ble.BleConstants.roundUpToNearestDispenseStep(stepQty, ingredient.unit)
+                    // Apply quantityMultiplier for step-specific amount.
+                    // Dispensable ingredients are snapped to 0.25-tsp
+                    // multiples so the on-screen number matches what the
+                    // hardware actually dispenses; non-dispensable
+                    // ingredients keep one decimal of precision.
+                    val rawStepQty = ingredient.quantity * step.quantityMultiplier
+                    val stepQty = if (ingredient.isDispensable) {
+                        com.souschef.api.ble.BleConstants.roundUpToNearestDispenseStep(rawStepQty, ingredient.unit)
+                    } else {
+                        (rawStepQty * 10).roundToInt() / 10.0
                     }
-                    stepQty = (stepQty * 10).roundToInt() / 10.0
                     map[index] = ingredient.copy(quantity = stepQty)
                 }
             }
