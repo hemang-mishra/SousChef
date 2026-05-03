@@ -15,8 +15,12 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.souschef.model.device.BleConnectionState
+import com.souschef.model.device.HardwareButtonEvent
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
@@ -43,8 +47,17 @@ class BleDeviceManager(private val context: Context) {
     private val _connectionState = MutableStateFlow<BleConnectionState>(BleConnectionState.Disconnected)
     val connectionState: StateFlow<BleConnectionState> = _connectionState.asStateFlow()
 
+    /**
+     * One-shot stream of hardware button presses forwarded by the dispenser.
+     * `extraBufferCapacity = 4` prevents missed events if the collector is
+     * momentarily off while the kitchen-side user mashes a button.
+     */
+    private val _buttonEvents = MutableSharedFlow<HardwareButtonEvent>(extraBufferCapacity = 4)
+    val buttonEvents: SharedFlow<HardwareButtonEvent> = _buttonEvents.asSharedFlow()
+
     private var gatt: BluetoothGatt? = null
     private var dispenseCharacteristic: BluetoothGattCharacteristic? = null
+    private var buttonCharacteristic: BluetoothGattCharacteristic? = null
 
     private val scanTimeoutHandler = Handler(Looper.getMainLooper())
 
@@ -94,6 +107,7 @@ class BleDeviceManager(private val context: Context) {
         gatt?.close()
         gatt = null
         dispenseCharacteristic = null
+        buttonCharacteristic = null
         _connectionState.value = BleConnectionState.Disconnected
     }
 
@@ -131,6 +145,7 @@ class BleDeviceManager(private val context: Context) {
                     this@BleDeviceManager.gatt?.close()
                     this@BleDeviceManager.gatt = null
                     dispenseCharacteristic = null
+                    buttonCharacteristic = null
                     _connectionState.value = BleConnectionState.Disconnected
                 }
                 else -> {
@@ -159,7 +174,14 @@ class BleDeviceManager(private val context: Context) {
                     BleConnectionState.Error("Dispense characteristic not found")
                 return
             }
-            
+
+            // Hardware button forwarding is optional — older firmware may not
+            // expose this characteristic. Subscribe only if present so the
+            // app degrades gracefully on legacy dispensers.
+            buttonCharacteristic =
+                service.getCharacteristic(BleConstants.BUTTON_CHARACTERISTIC_UUID)
+            buttonCharacteristic?.let { subscribeToButtonNotifications(gatt, it) }
+
             Log.d("BleDeviceManager", "✅ Device fully connected and characteristic assigned!")
             _connectionState.value = BleConnectionState.Connected
         }
@@ -171,6 +193,69 @@ class BleDeviceManager(private val context: Context) {
         ) {
             Log.d("BleDeviceManager", "onCharacteristicWrite callback fired. Status = $status (0=Success)")
             // Future: notify a pending callback/channel on write completion
+        }
+
+        // Pre-Tiramisu callback: payload arrives via characteristic.value.
+        @Deprecated("Used on API < 33; the new overload below handles 33+.")
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic
+        ) {
+            handleButtonNotification(characteristic.uuid, characteristic.value)
+        }
+
+        // API 33+ overload: payload is delivered as a separate parameter so
+        // we don't depend on the characteristic's mutable value field.
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            handleButtonNotification(characteristic.uuid, value)
+        }
+    }
+
+    private fun handleButtonNotification(charUuid: java.util.UUID?, payload: ByteArray?) {
+        if (charUuid != BleConstants.BUTTON_CHARACTERISTIC_UUID) return
+        val byte = payload?.firstOrNull() ?: return
+        val event = when (byte) {
+            BleConstants.BUTTON_PAYLOAD_PREVIOUS -> HardwareButtonEvent.PREVIOUS
+            BleConstants.BUTTON_PAYLOAD_NEXT     -> HardwareButtonEvent.NEXT
+            BleConstants.BUTTON_PAYLOAD_DISPENSE -> HardwareButtonEvent.DISPENSE
+            else -> {
+                Log.w("BleDeviceManager", "Ignoring unknown button payload: $byte")
+                return
+            }
+        }
+        Log.d("BleDeviceManager", "Hardware button: $event")
+        _buttonEvents.tryEmit(event)
+    }
+
+    /**
+     * Enables notifications on the button characteristic — both locally
+     * (via [BluetoothGatt.setCharacteristicNotification]) and on the peer by
+     * writing 0x0001 to the standard CCC descriptor. Without the descriptor
+     * write the ESP32 will never actually push notifications.
+     */
+    @Suppress("DEPRECATION")
+    private fun subscribeToButtonNotifications(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic
+    ) {
+        val ok = gatt.setCharacteristicNotification(characteristic, true)
+        if (!ok) {
+            Log.w("BleDeviceManager", "setCharacteristicNotification returned false")
+            return
+        }
+        val descriptor = characteristic.getDescriptor(BleConstants.CCC_DESCRIPTOR_UUID) ?: run {
+            Log.w("BleDeviceManager", "CCC descriptor missing on button characteristic")
+            return
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            gatt.writeDescriptor(descriptor, android.bluetooth.BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        } else {
+            descriptor.value = android.bluetooth.BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            gatt.writeDescriptor(descriptor)
         }
     }
 
@@ -193,14 +278,14 @@ class BleDeviceManager(private val context: Context) {
 
         // 2-byte payload: [compartmentId, count]
         val payload = byteArrayOf(compartmentId.toByte(), count.toByte())
-        
+
         Log.d("BleDeviceManager", "Preparing to write [${payload[0]}, ${payload[1]}] to characteristic...")
 
         // Use modern API if available, else fallback
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             val result = currentGatt.writeCharacteristic(
-                characteristic, 
-                payload, 
+                characteristic,
+                payload,
                 BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             )
             Log.d("BleDeviceManager", "TIRAMISU writeCharacteristic returned status code: $result (0=Success)")

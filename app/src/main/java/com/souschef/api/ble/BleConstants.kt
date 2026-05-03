@@ -34,6 +34,27 @@ object BleConstants {
     val DISPENSE_CHARACTERISTIC_UUID: UUID =
         UUID.fromString("87654321-4321-4321-4321-cba987654321")
 
+    /**
+     * Notify-only GATT characteristic the dispenser uses to forward physical
+     * button presses (Prev / Next / Dispense) to the app while the user is
+     * in cooking mode. Payload is a single byte:
+     *   1 → previous step
+     *   2 → next step
+     *   3 → dispense
+     */
+    val BUTTON_CHARACTERISTIC_UUID: UUID =
+        UUID.fromString("87654321-4321-4321-4321-cba987654322")
+
+    /** Standard 16-bit Client Characteristic Configuration descriptor UUID. */
+    val CCC_DESCRIPTOR_UUID: UUID =
+        UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+    // ── Hardware button payloads ──────────────────────────────────────────────
+
+    const val BUTTON_PAYLOAD_PREVIOUS: Byte = 1
+    const val BUTTON_PAYLOAD_NEXT: Byte = 2
+    const val BUTTON_PAYLOAD_DISPENSE: Byte = 3
+
     // ── Unit conversion constants ─────────────────────────────────────────────
 
     /** Volume dispensed per single count, in teaspoons. */

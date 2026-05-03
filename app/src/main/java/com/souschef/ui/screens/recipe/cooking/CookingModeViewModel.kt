@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.api.ble.BleDeviceManager
 import com.souschef.model.device.DispenseResult
+import com.souschef.model.device.HardwareButtonEvent
 import com.souschef.model.recipe.RecipeStep
 import com.souschef.model.recipe.ResolvedIngredient
 import com.souschef.model.recipe.SupportedLanguages
@@ -89,6 +90,14 @@ class CookingModeViewModel(
     private val _hapticEvents = MutableSharedFlow<HapticEvent>(extraBufferCapacity = 4)
     val hapticEvents: SharedFlow<HapticEvent> = _hapticEvents.asSharedFlow()
 
+    /**
+     * One-shot transient messages to surface in the cooking-mode UI (snackbar
+     * / toast). Used today for hardware-button feedback when the user
+     * presses Dispense on a step that has nothing to dispense.
+     */
+    private val _messageEvents = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messageEvents: SharedFlow<String> = _messageEvents.asSharedFlow()
+
     private var session: CookingSessionUseCase? = null
     private var lastTimerFinished = false
 
@@ -154,6 +163,75 @@ class CookingModeViewModel(
         loadData()
         loadCompartments()
         observeLanguageForTranslation()
+        observeHardwareButtons()
+    }
+
+    /**
+     * Forwards physical button presses from the dispenser to the cooking
+     * flow while the ViewModel is alive (i.e. while the user is on the
+     * Cooking Mode screen). The mapping is:
+     *   PREVIOUS → previousStep()
+     *   NEXT     → nextStep() (or finishCooking() on the last step)
+     *   DISPENSE → dispense the current step's ingredient if eligible,
+     *              otherwise emit a message so the screen can show a
+     *              "nothing to dispense" toast/snackbar.
+     */
+    private fun observeHardwareButtons() {
+        viewModelScope.launch {
+            bleDeviceManager.buttonEvents.collect { event ->
+                when (event) {
+                    HardwareButtonEvent.PREVIOUS -> previousStep()
+                    HardwareButtonEvent.NEXT -> {
+                        val state = uiState.value
+                        val isLast = state.currentStepIndex >= state.steps.size - 1
+                        if (isLast) finishCooking() else nextStep()
+                    }
+                    HardwareButtonEvent.DISPENSE -> handleHardwareDispensePress()
+                }
+            }
+        }
+    }
+
+    /**
+     * Reacts to the dedicated Dispense hardware button. Mirrors the on-screen
+     * button's eligibility rules — the ingredient must be marked dispensable
+     * (or be currently loaded in a compartment) AND not already mid-dispense.
+     * Anything else surfaces a transient message so the user knows why
+     * nothing happened.
+     */
+    private fun handleHardwareDispensePress() {
+        val state = uiState.value
+        val ingredient = state.stepIngredientMap[state.currentStepIndex]
+        val language = state.language
+        if (ingredient == null) {
+            viewModelScope.launch {
+                _messageEvents.emit(com.souschef.util.AppStrings.noDispenseForStep(language))
+            }
+            return
+        }
+        val isLoaded = isIngredientLoaded(ingredient)
+        if (!ingredient.isDispensable && !isLoaded) {
+            viewModelScope.launch {
+                _messageEvents.emit(com.souschef.util.AppStrings.noDispenseForStep(language))
+            }
+            return
+        }
+        if (!isLoaded) {
+            viewModelScope.launch {
+                _messageEvents.emit(com.souschef.util.AppStrings.ingredientNotLoaded(language))
+            }
+            return
+        }
+        if (state.dispensingIngredientIds.contains(ingredient.globalIngredientId)) {
+            // Already dispensing — ignore double presses to avoid stacking.
+            return
+        }
+        dispenseIngredient(
+            globalIngredientId = ingredient.globalIngredientId,
+            ingredientName = ingredient.name,
+            quantity = ingredient.quantity,
+            unit = ingredient.unit
+        )
     }
 
     /**
