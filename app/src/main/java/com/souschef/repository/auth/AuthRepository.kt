@@ -16,5 +16,11 @@ interface AuthRepository {
     fun signOut(): Flow<Resource<Unit>>
     fun getCurrentUserProfile(): Flow<Resource<UserProfile>>
     fun observeAuthState(): Flow<FirebaseUser?>
+
+    // ── Phase 8: Admin ────────────────────────────────────────────────────────
+    fun getAllUsers(): Flow<List<UserProfile>>
+    fun setVerifiedChef(uid: String, isVerified: Boolean): Flow<Resource<Unit>>
+    fun getUserCount(): Flow<Resource<Int>>
+    fun getRecipeCount(): Flow<Resource<Int>>
 }
 

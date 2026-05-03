@@ -1,9 +1,11 @@
 package com.souschef.usecases.device
 
+import android.content.Context
 import com.souschef.api.ble.BleConstants
 import com.souschef.api.ble.BleDeviceManager
 import com.souschef.model.device.BleConnectionState
 import com.souschef.model.device.DispenseResult
+import com.souschef.notifications.RefillNotificationHelper
 import com.souschef.service.device.DevicePreferenceService
 import com.souschef.util.Resource
 import kotlinx.coroutines.flow.Flow
@@ -32,7 +34,8 @@ import kotlin.math.ceil
  */
 class DispenseSpiceUseCase(
     private val deviceService: DevicePreferenceService,
-    private val bleDeviceManager: BleDeviceManager
+    private val bleDeviceManager: BleDeviceManager,
+    private val appContext: Context
 ) {
 
     fun execute(
@@ -98,6 +101,11 @@ class DispenseSpiceUseCase(
         // 6. Persist updated counts
         val updated = compartment.copy(dispensedCounts = compartment.dispensedCounts + count)
         deviceService.updateCompartment(updated)
+
+        // 6b. Local refill alert if newly low
+        if (!compartment.isLowStock && updated.isLowStock) {
+            RefillNotificationHelper.notifyLowStock(appContext, updated)
+        }
 
         // 7. Return success
         emit(Resource.success(

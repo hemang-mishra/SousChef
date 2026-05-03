@@ -115,6 +115,25 @@ class FirebaseAuthRepository(
 
     override fun observeAuthState(): Flow<FirebaseUser?> = service.observeAuthState()
 
+    // ── Phase 8: Admin ────────────────────────────────────────
+
+    override fun getAllUsers(): Flow<List<UserProfile>> = service.getAllUsersFlow()
+
+    override fun setVerifiedChef(uid: String, isVerified: Boolean): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        emit(safeFirestoreCall { service.setVerifiedChef(uid, isVerified) })
+    }
+
+    override fun getUserCount(): Flow<Resource<Int>> = flow {
+        emit(Resource.loading())
+        emit(safeFirestoreCall { service.getUserCount() })
+    }
+
+    override fun getRecipeCount(): Flow<Resource<Int>> = flow {
+        emit(Resource.loading())
+        emit(safeFirestoreCall { service.getRecipeCount() })
+    }
+
     // ── Private helpers ──────────────────────────────────────
 
     /**

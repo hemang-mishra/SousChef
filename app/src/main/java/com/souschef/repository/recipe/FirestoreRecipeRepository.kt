@@ -7,14 +7,17 @@ import com.souschef.util.Resource
 import com.souschef.util.safeFirestoreCall
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 
 /**
  * Firebase-backed implementation of [RecipeRepository].
  * Wraps service calls in safeFirestoreCall for error mapping.
  */
 class FirestoreRecipeRepository(
-    private val service: FirebaseRecipeService
+    private val service: FirebaseRecipeService,
+    private val cache: RecipeListCache
 ) : RecipeRepository {
 
     override fun createRecipe(recipe: Recipe): Flow<Resource<String>> = flow {
@@ -93,12 +96,14 @@ class FirestoreRecipeRepository(
         }
     }
 
-    override fun getRecipesByCreator(creatorId: String): Flow<List<Recipe>> {
-        return service.getRecipesByCreatorFlow(creatorId)
+    override fun getRecipesByCreator(creatorId: String): Flow<List<Recipe>> = flow {
+        cache.cachedMyRecipes(creatorId)?.let { emit(it) }
+        emitAll(service.getRecipesByCreatorFlow(creatorId).onEach { cache.updateMine(creatorId, it) })
     }
 
-    override fun getAllRecipes(): Flow<List<Recipe>> {
-        return service.getAllRecipesFlow()
+    override fun getAllRecipes(): Flow<List<Recipe>> = flow {
+        cache.allRecipes.value?.let { emit(it) }
+        emitAll(service.getAllRecipesFlow().onEach { cache.updateAll(it) })
     }
 
     override fun addStep(recipeId: String, step: RecipeStep): Flow<Resource<Unit>> = flow {
@@ -161,6 +166,39 @@ class FirestoreRecipeRepository(
         emit(Resource.loading())
         val result = safeFirestoreCall { service.deleteRecipe(recipeId) }
         emit(result)
+    }
+
+    // ── Phase 7: Fork & Save ──────────────────────────────────────────────────
+
+    override fun forkRecipe(
+        original: Recipe,
+        newCreatorId: String,
+        newCreatorName: String,
+        newCreatorIsVerifiedChef: Boolean
+    ): Flow<Resource<String>> = flow {
+        emit(Resource.loading())
+        emit(safeFirestoreCall {
+            service.forkRecipe(original, newCreatorId, newCreatorName, newCreatorIsVerifiedChef)
+        })
+    }
+
+    override fun saveRecipe(userId: String, recipeId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        emit(safeFirestoreCall { service.saveRecipe(userId, recipeId) })
+    }
+
+    override fun unsaveRecipe(userId: String, recipeId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        emit(safeFirestoreCall { service.unsaveRecipe(userId, recipeId) })
+    }
+
+    override fun isRecipeSaved(userId: String, recipeId: String): Flow<Resource<Boolean>> = flow {
+        emit(Resource.loading())
+        emit(safeFirestoreCall { service.isRecipeSaved(userId, recipeId) })
+    }
+
+    override fun getSavedRecipes(userId: String): Flow<List<Recipe>> {
+        return service.getSavedRecipesFlow(userId)
     }
 }
 

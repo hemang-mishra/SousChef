@@ -31,6 +31,11 @@ data class Recipe(
     val coverImageUrl: String? = null,
     val isPublished: Boolean = false,
     val originalRecipeId: String? = null,
+    val originalRecipeTitle: String? = null,
+    /** Number of times this recipe has been forked. Maintained via FieldValue.increment. */
+    val forkCount: Int = 0,
+    /** Number of users that have saved/bookmarked this recipe. */
+    val savedByCount: Int = 0,
     val createdAt: Timestamp = Timestamp.now(),
     val updatedAt: Timestamp = Timestamp.now(),
     val stepCount: Int = 0,

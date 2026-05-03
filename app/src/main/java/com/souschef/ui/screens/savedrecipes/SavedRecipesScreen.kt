@@ -77,7 +77,7 @@ fun SavedRecipesLayout(
     onGenerateSteps: (String) -> Unit,
     onCreateRecipe: () -> Unit
 ) {
-    if (uiState.isLoading) {
+    if (uiState.isLoading && uiState.recipes.isEmpty()) {
         RecipeListShimmer()
         return
     }

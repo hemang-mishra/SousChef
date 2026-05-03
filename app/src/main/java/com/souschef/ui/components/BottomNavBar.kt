@@ -6,10 +6,10 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -46,10 +46,10 @@ enum class BottomNavDestination(
         unselectedIcon = Icons.AutoMirrored.Outlined.MenuBook,
         route = Screens.NavSavedRecipesRoute
     ),
-    PROFILE(
-        label = "Profile",
-        selectedIcon = Icons.Filled.Person,
-        unselectedIcon = Icons.Outlined.Person,
+    SETTINGS(
+        label = "Settings",
+        selectedIcon = Icons.Filled.Settings,
+        unselectedIcon = Icons.Outlined.Settings,
         route = Screens.NavProfileRoute
     )
 }
@@ -144,19 +144,19 @@ fun SousChefBottomNavBar(
             colors = navItemColors()
         )
 
-        // Profile
-        val profileSelected = currentRoute is Screens.NavProfileRoute
+        // Settings
+        val settingsSelected = currentRoute is Screens.NavProfileRoute
         NavigationBarItem(
-            selected = profileSelected,
+            selected = settingsSelected,
             onClick = { onNavigate(Screens.NavProfileRoute) },
             icon = {
                 Icon(
-                    if (profileSelected) BottomNavDestination.PROFILE.selectedIcon
-                    else BottomNavDestination.PROFILE.unselectedIcon,
-                    contentDescription = "Profile"
+                    if (settingsSelected) BottomNavDestination.SETTINGS.selectedIcon
+                    else BottomNavDestination.SETTINGS.unselectedIcon,
+                    contentDescription = "Settings"
                 )
             },
-            label = { Text("Profile", style = MaterialTheme.typography.labelSmall) },
+            label = { Text("Settings", style = MaterialTheme.typography.labelSmall) },
             colors = navItemColors()
         )
     }

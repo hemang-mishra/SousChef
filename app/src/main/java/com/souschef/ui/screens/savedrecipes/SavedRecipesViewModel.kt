@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.souschef.ui.components.RecipeWithMeta
 import com.souschef.repository.recipe.RecipeRepository
 import com.souschef.ui.screens.home.HomeUiState
-import com.souschef.util.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,29 +32,19 @@ class SavedRecipesViewModel(
 
     private fun loadRecipes() {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = it.recipes.isEmpty()) }
 
             try {
                 recipeRepository.getRecipesByCreator(userId).collect { recipes ->
-                    // For each recipe, load step count
+                    // Use the denormalized stepCount/hasSteps fields on the
+                    // Recipe document; avoids one Firestore query per recipe.
                     val recipesWithMeta = recipes.map { recipe ->
-                        var stepCount = 0
-                        try {
-                            recipeRepository.getSteps(recipe.recipeId).collect { result ->
-                                if (result is Resource.Success) {
-                                    stepCount = result.data.size
-                                }
-                            }
-                        } catch (_: Exception) {
-                            // Non-fatal — show 0 steps
-                        }
                         RecipeWithMeta(
                             recipe = recipe,
-                            stepCount = stepCount,
-                            hasSteps = stepCount > 0
+                            stepCount = recipe.stepCount,
+                            hasSteps = recipe.hasSteps
                         )
                     }
-
                     _uiState.update { state ->
                         state.copy(
                             recipes = recipesWithMeta,

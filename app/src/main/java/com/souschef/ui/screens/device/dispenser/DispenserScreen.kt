@@ -170,13 +170,6 @@ fun DispenserScreenLayout(
                         color = AppColors.textSecondary()
                     )
                 }
-                IconButton(onClick = onNavigateToSettings) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "Dispenser Settings",
-                        tint = AppColors.textSecondary()
-                    )
-                }
             }
         }
     ) { padding ->

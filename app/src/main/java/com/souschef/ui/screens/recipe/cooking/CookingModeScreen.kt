@@ -193,6 +193,14 @@ fun CookingModeScreen(
             }
         }
     }
+
+    // Surface transient messages (e.g. hardware Dispense pressed on a step
+    // that has nothing to dispense) as snackbars.
+    LaunchedEffect(Unit) {
+        viewModel.messageEvents.collect { msg ->
+            scope.launch { snackbarHostState.showSnackbar(msg) }
+        }
+    }
 }
 
 private data class DispenseData(val id: String, val name: String, val quantity: Double, val unit: String)

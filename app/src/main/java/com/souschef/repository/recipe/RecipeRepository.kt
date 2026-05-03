@@ -22,5 +22,18 @@ interface RecipeRepository {
     fun deleteAllSteps(recipeId: String): Flow<Resource<Unit>>
     fun batchAddSteps(recipeId: String, steps: List<RecipeStep>): Flow<Resource<Unit>>
     fun deleteRecipe(recipeId: String): Flow<Resource<Unit>>
+
+    // ── Phase 7: Fork & Save ──────────────────────────────────────────────────
+    fun forkRecipe(
+        original: Recipe,
+        newCreatorId: String,
+        newCreatorName: String,
+        newCreatorIsVerifiedChef: Boolean
+    ): Flow<Resource<String>>
+
+    fun saveRecipe(userId: String, recipeId: String): Flow<Resource<Unit>>
+    fun unsaveRecipe(userId: String, recipeId: String): Flow<Resource<Unit>>
+    fun isRecipeSaved(userId: String, recipeId: String): Flow<Resource<Boolean>>
+    fun getSavedRecipes(userId: String): Flow<List<Recipe>>
 }
 

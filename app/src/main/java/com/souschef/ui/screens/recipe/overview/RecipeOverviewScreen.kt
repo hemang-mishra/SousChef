@@ -283,6 +283,16 @@ fun RecipeOverviewContent(
         ) {
             HeroSection(recipe = recipe, language = uiState.language)
 
+            val description = recipe.descriptionIn(uiState.language)
+            if (description.isNotBlank()) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                )
+            }
+
             ServingSelectorCard(
                 selectedServings = uiState.selectedServings,
                 minServings = minServings,

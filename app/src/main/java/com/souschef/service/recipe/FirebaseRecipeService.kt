@@ -6,9 +6,13 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.Source
 import com.souschef.model.recipe.Recipe
 import com.souschef.model.recipe.RecipeStep
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -19,6 +23,7 @@ class FirebaseRecipeService(
     private val firestore: FirebaseFirestore
 ) {
     private val recipesCollection = firestore.collection("recipes")
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Creates a new recipe document. Returns the auto-generated document ID.
@@ -180,5 +185,138 @@ class FirebaseRecipeService(
 
         // 2. Delete the recipe document itself
         recipesCollection.document(recipeId).delete().await()
+    }
+
+    // ── Phase 7: Fork & Save ──────────────────────────────────────────────────
+
+    /**
+     * Creates a forked copy of [original] for [newCreator]. The copy keeps the
+     * same ingredient references and step content but resets ownership and
+     * counters. The original recipe's [Recipe.forkCount] is incremented.
+     *
+     * @return the newly created recipe id.
+     */
+    suspend fun forkRecipe(
+        original: Recipe,
+        newCreatorId: String,
+        newCreatorName: String,
+        newCreatorIsVerifiedChef: Boolean
+    ): String {
+        // 1) Read original steps
+        val originalSteps = getSteps(original.recipeId)
+
+        // 2) Allocate ids
+        val newDocRef = recipesCollection.document()
+        val newRecipeId = newDocRef.id
+
+        // 3) Build the forked recipe
+        val now = com.google.firebase.Timestamp.now()
+        val forkedRecipe = original.copy(
+            recipeId = newRecipeId,
+            creatorId = newCreatorId,
+            creatorName = newCreatorName,
+            isVerifiedChef = newCreatorIsVerifiedChef,
+            isPublished = false,
+            originalRecipeId = original.recipeId,
+            originalRecipeTitle = original.title,
+            forkCount = 0,
+            savedByCount = 0,
+            createdAt = now,
+            updatedAt = now,
+            stepCount = originalSteps.size,
+            hasSteps = originalSteps.isNotEmpty()
+        )
+
+        // 4) Batch: write recipe, copy steps, increment original.forkCount
+        val batch = firestore.batch()
+        batch.set(newDocRef, forkedRecipe)
+
+        val stepsCollection = newDocRef.collection("steps")
+        originalSteps.forEach { step ->
+            val stepDocRef = stepsCollection.document()
+            batch.set(stepDocRef, step.copy(stepId = stepDocRef.id))
+        }
+
+        batch.update(
+            recipesCollection.document(original.recipeId),
+            mapOf("forkCount" to FieldValue.increment(1))
+        )
+
+        batch.commit().await()
+        return newRecipeId
+    }
+
+    private fun savedRecipesCollection(userId: String) =
+        firestore.collection("savedRecipes").document(userId).collection("recipes")
+
+    /**
+     * Adds a recipe to a user's saved/bookmarked list. Increments the parent
+     * recipe's [Recipe.savedByCount].
+     */
+    suspend fun saveRecipe(userId: String, recipeId: String) {
+        val batch = firestore.batch()
+        batch.set(
+            savedRecipesCollection(userId).document(recipeId),
+            mapOf(
+                "recipeId" to recipeId,
+                "savedAt" to com.google.firebase.Timestamp.now()
+            )
+        )
+        batch.update(
+            recipesCollection.document(recipeId),
+            mapOf("savedByCount" to FieldValue.increment(1))
+        )
+        batch.commit().await()
+    }
+
+    /**
+     * Removes a recipe from a user's saved list. Decrements [Recipe.savedByCount].
+     */
+    suspend fun unsaveRecipe(userId: String, recipeId: String) {
+        val batch = firestore.batch()
+        batch.delete(savedRecipesCollection(userId).document(recipeId))
+        batch.update(
+            recipesCollection.document(recipeId),
+            mapOf("savedByCount" to FieldValue.increment(-1))
+        )
+        batch.commit().await()
+    }
+
+    /** True if the user has saved this recipe. */
+    suspend fun isRecipeSaved(userId: String, recipeId: String): Boolean {
+        return savedRecipesCollection(userId).document(recipeId).get().await().exists()
+    }
+
+    /**
+     * Real-time list of recipes saved by [userId]. The list is built by reading
+     * the saved-recipes index then fetching each referenced recipe document.
+     */
+    fun getSavedRecipesFlow(userId: String): Flow<List<Recipe>> = callbackFlow {
+        val registration = savedRecipesCollection(userId)
+            .orderBy("savedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val ids = snapshot?.documents?.map { it.id } ?: emptyList()
+                if (ids.isEmpty()) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                // Fetch each referenced recipe (sequentially is fine — typically small)
+                ioScope.launch {
+                    val recipes = ids.mapNotNull { id ->
+                        try {
+                            recipesCollection.document(id).get().await()
+                                .toObject(Recipe::class.java)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    trySend(recipes)
+                }
+            }
+        awaitClose { registration.remove() }
     }
 }

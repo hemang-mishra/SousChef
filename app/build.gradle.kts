@@ -122,6 +122,9 @@ dependencies {
     // Google Generative AI (Gemini)
     implementation(libs.google.generativeai)
 
+    // WorkManager (Phase 9 — background refill checks)
+    implementation(libs.androidx.work.runtime.ktx)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

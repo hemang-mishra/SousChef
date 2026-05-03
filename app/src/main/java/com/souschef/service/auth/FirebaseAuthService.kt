@@ -6,6 +6,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.souschef.model.auth.UserProfile
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -79,5 +80,41 @@ class FirebaseAuthService(
         }
         usersCollection.document(uid).update(timestamped).await()
     }
+
+    // ── Phase 8: Admin operations ────────────────────────────
+
+    /** Real-time list of every user in the system. Admin-only on the UI side. */
+    fun getAllUsersFlow(): Flow<List<UserProfile>> = callbackFlow {
+        val registration = usersCollection
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val users = snapshot?.toObjects(UserProfile::class.java) ?: emptyList()
+                trySend(users)
+            }
+        awaitClose { registration.remove() }
+    }
+
+    /** Toggle the verified-chef flag on a user. */
+    suspend fun setVerifiedChef(uid: String, isVerified: Boolean) {
+        usersCollection.document(uid).update(
+            mapOf(
+                "isVerifiedChef" to isVerified,
+                "updatedAt" to Timestamp.now()
+            )
+        ).await()
+    }
+
+    /** Total number of users (one-shot count). */
+    suspend fun getUserCount(): Int =
+        usersCollection.count().get(com.google.firebase.firestore.AggregateSource.SERVER).await().count.toInt()
+
+    /** Total number of recipes (one-shot count). */
+    suspend fun getRecipeCount(): Int =
+        firestore.collection("recipes").count()
+            .get(com.google.firebase.firestore.AggregateSource.SERVER).await().count.toInt()
 }
 

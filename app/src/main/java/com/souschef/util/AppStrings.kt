@@ -44,6 +44,22 @@ object AppStrings {
     fun dispense(language: String): String =
         if (language == SupportedLanguages.HINDI) "डिस्पेंस" else "Dispense"
 
+    /** Shown when the user presses the hardware Dispense button on a step
+     *  that has no dispensable ingredient. */
+    fun noDispenseForStep(language: String): String =
+        if (language == SupportedLanguages.HINDI)
+            "इस चरण में डिस्पेंस करने के लिए कुछ नहीं है।"
+        else
+            "Nothing to dispense for this step."
+
+    /** Shown when the user presses the hardware Dispense button but the
+     *  current step's ingredient isn't loaded in any compartment. */
+    fun ingredientNotLoaded(language: String): String =
+        if (language == SupportedLanguages.HINDI)
+            "इस सामग्री के लिए कोई कम्पार्टमेंट लोड नहीं है।"
+        else
+            "This ingredient isn't loaded in any compartment."
+
     // ── Cooking Mode — Visual Cue ──────────────────────────────────────────
 
     fun lookFor(language: String): String =
