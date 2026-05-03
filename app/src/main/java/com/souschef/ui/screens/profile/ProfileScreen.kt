@@ -6,8 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,10 +29,6 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Translate
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,11 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,13 +50,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.google.mlkit.common.model.DownloadConditions
-import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.translate.TranslateLanguage
-import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import com.souschef.model.auth.UserProfile
@@ -75,47 +63,53 @@ import com.souschef.ui.components.VerifiedChefBadge
 import com.souschef.ui.theme.AppColors
 import com.souschef.ui.theme.GradientGold
 import com.souschef.ui.theme.SousChefTheme
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 // ── Supported target languages (source is always English) ────────────────────
 
 data class SupportedLanguage(
     val displayName: String,
-    val mlKitCode: String,   // TranslateLanguage constant
+    val mlKitCode: String, // TranslateLanguage constant
     val sizeEstimateMb: Int = 30
 )
 
-val SUPPORTED_LANGUAGES = listOf(
-    SupportedLanguage("French", TranslateLanguage.FRENCH),
-    SupportedLanguage("German", TranslateLanguage.GERMAN),
-    SupportedLanguage("Spanish", TranslateLanguage.SPANISH),
-    SupportedLanguage("Hindi", TranslateLanguage.HINDI),
-    SupportedLanguage("Japanese", TranslateLanguage.JAPANESE),
-    SupportedLanguage("Chinese (Simplified)", TranslateLanguage.CHINESE),
-    SupportedLanguage("Arabic", TranslateLanguage.ARABIC),
-    SupportedLanguage("Portuguese", TranslateLanguage.PORTUGUESE),
-    SupportedLanguage("Italian", TranslateLanguage.ITALIAN),
-    SupportedLanguage("Korean", TranslateLanguage.KOREAN),
-)
+val SUPPORTED_LANGUAGES =
+    listOf(
+        SupportedLanguage("French", TranslateLanguage.FRENCH),
+        SupportedLanguage("German", TranslateLanguage.GERMAN),
+        SupportedLanguage("Spanish", TranslateLanguage.SPANISH),
+        SupportedLanguage("Hindi", TranslateLanguage.HINDI),
+        SupportedLanguage("Japanese", TranslateLanguage.JAPANESE),
+        SupportedLanguage("Chinese (Simplified)", TranslateLanguage.CHINESE),
+        SupportedLanguage("Arabic", TranslateLanguage.ARABIC),
+        SupportedLanguage("Portuguese", TranslateLanguage.PORTUGUESE),
+        SupportedLanguage("Italian", TranslateLanguage.ITALIAN),
+        SupportedLanguage("Korean", TranslateLanguage.KOREAN),
+    )
 
 // ── Download state ────────────────────────────────────────────────────────────
 
-enum class ModelDownloadState { NOT_DOWNLOADED, DOWNLOADING, DOWNLOADED, ERROR }
+enum class ModelDownloadState {
+    NOT_DOWNLOADED,
+    DOWNLOADING,
+    DOWNLOADED,
+    ERROR
+}
 
 // ── Translation helper ────────────────────────────────────────────────────────
 
 /**
- * Translates [text] from English to [targetLanguageCode] (a [TranslateLanguage] constant).
- * The model must already be downloaded before calling this.
+ * Translates [text] from English to [targetLanguageCode] (a [TranslateLanguage] constant). The
+ * model must already be downloaded before calling this.
  *
  * @return the translated string, or null on failure.
  */
 suspend fun translateText(text: String, targetLanguageCode: String): String? {
-    val options = TranslatorOptions.Builder()
-        .setSourceLanguage(TranslateLanguage.ENGLISH)
-        .setTargetLanguage(targetLanguageCode)
-        .build()
+    val options =
+        TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.ENGLISH)
+            .setTargetLanguage(targetLanguageCode)
+            .build()
     val translator = Translation.getClient(options)
     return try {
         translator.translate(text).await()
@@ -129,11 +123,8 @@ suspend fun translateText(text: String, targetLanguageCode: String): String? {
 // ── Profile Screen ────────────────────────────────────────────────────────────
 
 /**
- * Profile screen with:
- *  • User info & avatar
- *  • Translation model download manager
- *  • Language preference selector
- *  • Sign-out action
+ * Profile screen with: • User info & avatar • Translation model download manager • Language
+ * preference selector • Sign-out action
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,7 +135,7 @@ fun ProfileScreen(
     onSignOut: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-/*
+    /*
     val modelManager = remember { RemoteModelManager.getInstance() }
 
     // Track download state per language code
@@ -225,39 +216,45 @@ fun ProfileScreen(
                     color = AppColors.textPrimary()
                 )
             },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
-            )
+            colors =
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
         )
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(40.dp))
 
             // ── Avatar ────────────────────────────────────────────────────────
             Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(GradientGold))
-                    .padding(4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(4.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(GradientGold)),
+                modifier =
+                    Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(Brush.linearGradient(GradientGold))
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(Brush.linearGradient(GradientGold)),
                 contentAlignment = Alignment.Center
             ) {
-                val initials = userProfile?.displayName
-                    ?.split(" ")
-                    ?.take(2)
-                    ?.mapNotNull { it.firstOrNull()?.uppercase() }
-                    ?.joinToString("") ?: "?"
+                val initials =
+                    userProfile
+                        ?.displayName
+                        ?.split(" ")
+                        ?.take(2)
+                        ?.mapNotNull { it.firstOrNull()?.uppercase() }
+                        ?.joinToString("")
+                        ?: "?"
 
                 Text(
                     text = initials,
@@ -288,7 +285,7 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(40.dp))
 
-/*
+            /*
             // ── Translation Models Section ────────────────────────────────────
             SectionCard(
                 title = "Translation Models",
@@ -530,10 +527,10 @@ private fun LanguageModelRow(
                 }
 
                 ModelDownloadState.DOWNLOADING -> {
-//                    CircularProgressIndicator(
-//                        modifier = Modifier.size(22.dp),
-//                        strokeWidth = 2.dp
-//                    )
+                    //                    CircularProgressIndicator(
+                    //                        modifier = Modifier.size(22.dp),
+                    //                        strokeWidth = 2.dp
+                    //                    )
                 }
 
                 ModelDownloadState.DOWNLOADED -> {
@@ -604,18 +601,20 @@ private fun LanguagePreferenceRow(
     onSelect: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onSelect)
+                .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = isSelected,
             onClick = onSelect,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = MaterialTheme.colorScheme.primary
-            )
+            colors =
+                RadioButtonDefaults.colors(
+                    selectedColor = MaterialTheme.colorScheme.primary
+                )
         )
         Spacer(Modifier.width(8.dp))
         Column {
@@ -623,11 +622,13 @@ private fun LanguagePreferenceRow(
                 text = language.displayName,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else AppColors.textPrimary()
+                color =
+                    if (isSelected) MaterialTheme.colorScheme.primary
+                    else AppColors.textPrimary()
             )
             if (isSelected) {
                 Text(
-                    text = "Active – translations will use this language",
+                    text = "Active - translations will use this language",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                 )
@@ -635,7 +636,6 @@ private fun LanguagePreferenceRow(
         }
     }
 }
-
 
 // ── Previews ──────────────────────────────────────────────────────────────────
 
@@ -645,11 +645,12 @@ private fun LanguagePreferenceRow(
 private fun ProfileScreenPreview() {
     SousChefTheme {
         ProfileScreen(
-            userProfile = UserProfile(
-                displayName = "Hemang Mishra",
-                email = "hemang@souschef.com",
-                role = "user"
-            ),
+            userProfile =
+                UserProfile(
+                    displayName = "Hemang Mishra",
+                    email = "hemang@souschef.com",
+                    role = "user"
+                ),
             preferredLanguageCode = null,
             onSetPreferredLanguage = {},
             onSignOut = {}
