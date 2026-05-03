@@ -1102,8 +1102,22 @@ private fun Long.formatTimerDisplay(): String {
     return "%02d:%02d".format(minutes, seconds)
 }
 
-private fun Double.toOneDecimalString(): String =
-    ((this * 10.0).roundToInt() / 10.0).toString()
+/**
+ * Renders a quantity with up to two decimal places, stripping trailing
+ * zeros. This is intentionally NOT a fixed 1-decimal rounder: dispensable
+ * ingredients are snapped to 0.25-tsp multiples (e.g. 0.25 / 0.5 / 0.75)
+ * and we want the user to actually see "0.75" instead of "0.8" so the
+ * displayed quantity matches what the hardware ejects.
+ */
+private fun Double.toOneDecimalString(): String {
+    val rounded = (this * 100.0).roundToInt() / 100.0
+    return when {
+        rounded == rounded.toLong().toDouble() -> rounded.toLong().toString()
+        (rounded * 10.0) == (rounded * 10.0).toLong().toDouble() ->
+            "%.1f".format(rounded)
+        else -> "%.2f".format(rounded)
+    }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Previews
