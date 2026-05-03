@@ -442,7 +442,7 @@ class CreateRecipeViewModel(
      * @param youtubeUrl Full YouTube video URL.
      * @param language   BCP-47 language code (e.g. "en", "hi") for the transcript.
      */
-    fun onGenerateStepsFromYoutube(youtubeUrl: String, language: String) {
+    fun onGenerateStepsFromYoutube(youtubeUrl: String) {
         if (youtubeUrl.isBlank()) {
             _generalError.value = "Please enter a valid YouTube URL."
             return
@@ -482,7 +482,6 @@ class CreateRecipeViewModel(
                 val contentArray = root["content"]?.jsonArray
                     ?: throw Exception("No transcript content found for this video.")
 
-//                val contentLanguage = root["lang"]?: throw Exception("NO transcript language found for this video.")
 
 
                 val transcriptText = contentArray.joinToString(" ") { element ->
@@ -499,10 +498,7 @@ class CreateRecipeViewModel(
                 // ── 3. Build a prompt that includes transcript + language note ────
                 val descriptionWithLang = buildString {
                     append("The following is a cooking video transcript")
-//                    if (language.isNotBlank() && language != "en") {
-//                        append(" (originally in language code: $contentLanguage)")
-//                    }
-                    append(". Generate the cooking steps in $language language. "
+                    append(". Generate the cooking steps in English language. "
                     )
                     append("\n\nTranscript:\n")
                     append(transcriptText)

@@ -146,18 +146,18 @@ fun DietaryTag(
 fun VerifiedChefBadge(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(Brush.linearGradient(GradientGold))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 5.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Outlined.Verified,
             contentDescription = "Verified Chef",
             tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(12.dp)
+            modifier = Modifier.size(10.dp)
         )
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(3.dp))
         Text(
             text = "Verified Chef",
             style = MaterialTheme.typography.labelSmall,
