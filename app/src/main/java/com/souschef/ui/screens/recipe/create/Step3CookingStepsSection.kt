@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
@@ -51,6 +52,9 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -96,6 +100,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.souschef.util.VoiceToTextParser
@@ -118,7 +123,8 @@ internal fun Step3CookingSteps(
     onRetryGeneration: () -> Unit,
     onStepMediaSelected: (Int, Uri, String) -> Unit,
     onRemoveStepMedia: (Int) -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onGenerateStepsFromYoutube: (url: String, lang: String) -> Unit
 ) {
     val globalMap = remember(uiState.globalIngredients) {
         uiState.globalIngredients.associateBy { it.ingredientId }
@@ -138,7 +144,8 @@ internal fun Step3CookingSteps(
                 onAiDescriptionChange = onAiDescriptionChange,
                 onGenerateSteps = onGenerateSteps,
                 onAddManualStep = onAddManualStep,
-                onSkip = onSkip
+                onSkip = onSkip,
+                onGenerateStepsFromYoutube = onGenerateStepsFromYoutube
             )
             CreateRecipeUiState.StepsStage.LOADING -> StepsLoadingStage(
                 onCancel = onCancelGeneration
@@ -170,11 +177,14 @@ private fun StepsInputStage(
     onAiDescriptionChange: (String) -> Unit,
     onGenerateSteps: () -> Unit,
     onAddManualStep: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onGenerateStepsFromYoutube: (url: String, lang: String) -> Unit
 ) {
     val context = LocalContext.current
     val voiceParser = remember { VoiceToTextParser(context.applicationContext as Application) }
     val voiceState by voiceParser.state.collectAsState()
+
+    var showYoutubeDialog by remember { mutableStateOf(false) }
 
     var hasVoicePermission by remember {
         mutableStateOf(
@@ -330,6 +340,31 @@ private fun StepsInputStage(
 
         PremiumDivider()
 
+        // YouTube import button
+        TextButton(
+            onClick = { showYoutubeDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(AppColors.gold().copy(alpha = 0.08f))
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = AppColors.gold()
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "🎬 Add Steps from YouTube",
+                style = MaterialTheme.typography.labelLarge,
+                color = AppColors.gold(),
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        PremiumDivider()
+
         // Manual step button
         PremiumOutlinedButton(
             text = "➕ Add Steps Manually",
@@ -337,6 +372,17 @@ private fun StepsInputStage(
         )
 
         Spacer(Modifier.height(32.dp))
+    }
+
+    // YouTube dialog
+    if (showYoutubeDialog) {
+        YoutubeTranscriptDialog(
+            onDismiss = { showYoutubeDialog = false },
+            onConfirm = { url, lang ->
+                showYoutubeDialog = false
+                onGenerateStepsFromYoutube(url, lang)
+            }
+        )
     }
 }
 
@@ -1163,4 +1209,167 @@ private fun QuantityMultiplierRow(
             )
         )
     }
+}
+
+// ── YouTube Transcript Dialog ─────────────────────────────────
+
+@Composable
+private fun YoutubeTranscriptDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (url: String, lang: String) -> Unit
+) {
+    var url by remember { mutableStateOf("") }
+    var lang by remember { mutableStateOf("en") }
+
+    // Language options: code → display name
+    val languageOptions = listOf(
+        "en" to "English",
+        "hi" to "Hindi (हिन्दी)",
+        "es" to "Spanish (Español)",
+        "fr" to "French (Français)",
+        "de" to "German (Deutsch)",
+        "zh" to "Chinese (中文)",
+        "ar" to "Arabic (عربي)",
+        "pt" to "Portuguese (Português)",
+        "ru" to "Russian (Русский)",
+        "ja" to "Japanese (日本語)",
+        "ko" to "Korean (한국어)",
+        "it" to "Italian (Italiano)",
+    )
+    var showLangDropdown by remember { mutableStateOf(false) }
+    val selectedLangName = languageOptions.find { it.first == lang }?.second ?: lang
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color.Black,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(AppColors.gold().copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = AppColors.gold(),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Add Steps from YouTube",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = AppColors.textPrimary(),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Paste a YouTube cooking video URL",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppColors.textTertiary()
+                        )
+                    }
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // URL field
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("YouTube URL") },
+                    placeholder = {
+                        Text(
+                            "https://www.youtube.com/watch?v=...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppColors.textTertiary()
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AppColors.gold(),
+                        unfocusedBorderColor = AppColors.border(),
+                        focusedLabelColor = AppColors.gold(),
+                        cursorColor = AppColors.gold()
+                    ),
+                    textStyle = MaterialTheme.typography.bodyMedium
+                )
+
+                // Language picker
+                Box {
+                    OutlinedTextField(
+                        value = selectedLangName,
+                        onValueChange = {},
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Recipe Language") },
+                        readOnly = true,
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AppColors.gold(),
+                            unfocusedBorderColor = AppColors.border(),
+                            focusedLabelColor = AppColors.gold(),
+                            cursorColor = AppColors.gold()
+                        ),
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        trailingIcon = {
+                            IconButton(onClick = { showLangDropdown = true }) {
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Select language",
+                                    tint = AppColors.textSecondary()
+                                )
+                            }
+                        }
+                    )
+                    DropdownMenu(
+                        expanded = showLangDropdown,
+                        onDismissRequest = { showLangDropdown = false }
+                    ) {
+                        languageOptions.forEach { (code, name) ->
+                            DropdownMenuItem(
+                                text = { Text(name, color = AppColors.textPrimary()) },
+                                onClick = {
+                                    lang = code
+                                    showLangDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(url.trim(), lang) },
+                enabled = url.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.gold(),
+                    disabledContainerColor = AppColors.gold().copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text(
+                    "Generate Steps",
+                    color = AppColors.onGold(),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = AppColors.textSecondary())
+            }
+        }
+    )
 }

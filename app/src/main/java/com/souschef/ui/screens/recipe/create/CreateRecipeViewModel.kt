@@ -1,6 +1,7 @@
 package com.souschef.ui.screens.recipe.create
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.souschef.model.auth.UserProfile
@@ -26,6 +27,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Unified ViewModel for the Create / Edit Recipe wizard (4 steps).
@@ -425,6 +432,116 @@ class CreateRecipeViewModel(
     fun onRetryGeneration() {
         _generalError.value = null
         _stepsStage.value = CreateRecipeUiState.StepsStage.INPUT
+    }
+
+    /**
+     * Fetches a YouTube transcript via the RapidAPI YouTube Transcripts endpoint,
+     * concatenates all text segments, then calls Gemini (via [generateRecipeStepsUseCase])
+     * to generate cooking steps in the requested [language].
+     *
+     * @param youtubeUrl Full YouTube video URL.
+     * @param language   BCP-47 language code (e.g. "en", "hi") for the transcript.
+     */
+    fun onGenerateStepsFromYoutube(youtubeUrl: String, language: String) {
+        if (youtubeUrl.isBlank()) {
+            _generalError.value = "Please enter a valid YouTube URL."
+            return
+        }
+
+        _stepsStage.value = CreateRecipeUiState.StepsStage.LOADING
+        _isGeneratingSteps.value = true
+        _generalError.value = null
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // ── 1. Fetch transcript from RapidAPI ────────────────────────────
+                val encodedUrl = java.net.URLEncoder.encode(youtubeUrl, "UTF-8")
+                val apiUrl = "https://youtube-transcripts.p.rapidapi.com/youtube/transcript" +
+                    "?url=$encodedUrl&chunkSize=500&text=false&lang=en"
+
+                val connection = URL(apiUrl).openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.setRequestProperty("x-rapidapi-host", "youtube-transcripts.p.rapidapi.com")
+                connection.setRequestProperty("x-rapidapi-key", "0ac74af7c4msh89f3856eee7b554p1210eajsnc7391a13d48b")
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 15_000
+
+                val responseBody = try {
+                    if (connection.responseCode !in 200..299) {
+                        throw Exception("Transcript API error: HTTP ${connection.responseCode}")
+                    }
+                    connection.inputStream.bufferedReader().readText()
+                } finally {
+                    connection.disconnect()
+                }
+
+                // ── 2. Extract all text segments ─────────────────────────────────
+                val lenientJson = Json { ignoreUnknownKeys = true; isLenient = true }
+                val root = lenientJson.parseToJsonElement(responseBody).jsonObject
+                val contentArray = root["content"]?.jsonArray
+                    ?: throw Exception("No transcript content found for this video.")
+
+//                val contentLanguage = root["lang"]?: throw Exception("NO transcript language found for this video.")
+
+
+                val transcriptText = contentArray.joinToString(" ") { element ->
+                    element.jsonObject["text"]?.jsonPrimitive?.content?.trim() ?: ""
+                }.trim()
+
+
+                if (transcriptText.isBlank()) {
+                    throw Exception("Transcript is empty. The video may not have captions.")
+                }
+
+                Log.d("CreateRecipeVM", "Transcript fetched: ${transcriptText.take(200)}...")
+
+                // ── 3. Build a prompt that includes transcript + language note ────
+                val descriptionWithLang = buildString {
+                    append("The following is a cooking video transcript")
+//                    if (language.isNotBlank() && language != "en") {
+//                        append(" (originally in language code: $contentLanguage)")
+//                    }
+                    append(". Generate the cooking steps in $language language. "
+                    )
+                    append("\n\nTranscript:\n")
+                    append(transcriptText)
+                }
+
+                // ── 4. Store description so user can see / edit it ───────────────
+                _aiDescription.value = descriptionWithLang
+
+                // ── 5. Generate steps through existing use case ──────────────────
+                generateRecipeStepsUseCase.execute(
+                    description = descriptionWithLang,
+                    baseServingSize = _baseServingSize.value,
+                    creatorUserId = currentUser.uid
+                ).collect { result ->
+                    when (result) {
+                        is Resource.Success -> {
+                            val data = result.data
+                            _steps.value = data.steps
+                            _ingredients.value = data.ingredients
+                            _newlyCreatedIngredientNames.value = data.newlyCreatedIngredients
+                            _isGeneratingSteps.value = false
+                            _stepsStage.value = CreateRecipeUiState.StepsStage.REVIEW
+                            loadGlobalIngredients()
+                        }
+                        is Resource.Failure -> {
+                            _isGeneratingSteps.value = false
+                            _generalError.value = result.message ?: "Generation failed. Please try again."
+                            _stepsStage.value = CreateRecipeUiState.StepsStage.INPUT
+                        }
+                        is Resource.Loading -> { /* keep spinner */ }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("CreateRecipeVM", "YouTube steps generation failed", e)
+                _isGeneratingSteps.value = false
+                _generalError.value = e.message ?: "Failed to fetch YouTube transcript."
+                _stepsStage.value = CreateRecipeUiState.StepsStage.INPUT
+            }
+        }
     }
 
     fun onStepMediaSelected(stepIndex: Int, uri: Uri, mediaType: String) {

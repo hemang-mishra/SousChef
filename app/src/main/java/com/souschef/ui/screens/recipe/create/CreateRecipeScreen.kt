@@ -120,6 +120,7 @@ fun CreateRecipeScreen(
         onRetryGeneration = viewModel::onRetryGeneration,
         onStepMediaSelected = viewModel::onStepMediaSelected,
         onRemoveStepMedia = viewModel::onRemoveStepMedia,
+        onGenerateStepsFromYoutube = viewModel::onGenerateStepsFromYoutube,
         // Step 2: Ingredients (AI-extracted, editable)
         onAddIngredient = viewModel::onAddIngredient,
         onRemoveIngredient = viewModel::onRemoveIngredient,
@@ -165,6 +166,7 @@ fun CreateRecipeScreenLayout(
     onRetryGeneration: () -> Unit,
     onStepMediaSelected: (Int, Uri, String) -> Unit,
     onRemoveStepMedia: (Int) -> Unit,
+    onGenerateStepsFromYoutube: (url: String, lang: String) -> Unit,
     // Step 2: Ingredients
     onAddIngredient: (RecipeIngredient) -> Unit,
     onRemoveIngredient: (String) -> Unit,
@@ -252,7 +254,8 @@ fun CreateRecipeScreenLayout(
                         onRetryGeneration = onRetryGeneration,
                         onStepMediaSelected = onStepMediaSelected,
                         onRemoveStepMedia = onRemoveStepMedia,
-                        onSkip = onNextStep
+                        onSkip = onNextStep,
+                        onGenerateStepsFromYoutube = onGenerateStepsFromYoutube
                     )
                     2 -> Step2Ingredients(
                         ingredients = uiState.ingredients,
@@ -441,6 +444,7 @@ private fun CreateRecipeStep1Preview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _, _ -> },
             onSave = {}
         )
     }
@@ -479,6 +483,7 @@ private fun CreateRecipeStep2Preview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _, _ -> },
             onSave = {}
         )
     }
@@ -508,6 +513,7 @@ private fun CreateRecipeStep3Preview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _, _ -> },
             onSave = {}
         )
     }
@@ -553,6 +559,7 @@ private fun CreateRecipeStep4ReviewPreview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _, _ -> },
             onSave = {}
         )
     }
