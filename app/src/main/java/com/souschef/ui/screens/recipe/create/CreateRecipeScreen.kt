@@ -61,7 +61,8 @@ import com.souschef.ui.theme.SousChefTheme
 import org.koin.compose.koinInject
 
 
-val UNIT_OPTIONS_RECIPE = listOf("grams", "ml", "tsp", "tbsp", "cups", "pieces", "oz", "lbs", "kg", "L")
+val UNIT_OPTIONS_RECIPE =
+    listOf("grams", "ml", "tsp", "tbsp", "cups", "pieces", "oz", "lbs", "kg", "L")
 
 // ─────────────────────────────────────────────────────────────
 // Stateful Screen (wires ViewModel)
@@ -120,6 +121,7 @@ fun CreateRecipeScreen(
         onRetryGeneration = viewModel::onRetryGeneration,
         onStepMediaSelected = viewModel::onStepMediaSelected,
         onRemoveStepMedia = viewModel::onRemoveStepMedia,
+        onGenerateStepsFromYoutube = viewModel::onGenerateStepsFromYoutube,
         // Step 2: Ingredients (AI-extracted, editable)
         onAddIngredient = viewModel::onAddIngredient,
         onRemoveIngredient = viewModel::onRemoveIngredient,
@@ -165,6 +167,7 @@ fun CreateRecipeScreenLayout(
     onRetryGeneration: () -> Unit,
     onStepMediaSelected: (Int, Uri, String) -> Unit,
     onRemoveStepMedia: (Int) -> Unit,
+    onGenerateStepsFromYoutube: (url: String) -> Unit,
     // Step 2: Ingredients
     onAddIngredient: (RecipeIngredient) -> Unit,
     onRemoveIngredient: (String) -> Unit,
@@ -176,7 +179,7 @@ fun CreateRecipeScreenLayout(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                windowInsets = WindowInsets(top = 0.dp),
+                windowInsets = WindowInsets(top = 0.dp, bottom = 0.dp, right = 0.dp, left = 0.dp),
                 title = {
                     Text(
                         if (isEditMode) "Edit Recipe" else "Create Recipe",
@@ -199,17 +202,18 @@ fun CreateRecipeScreenLayout(
             )
         }
     ) { padding ->
+        val topPadding = padding.calculateTopPadding()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-                .padding(padding)
+                .padding(top = topPadding)
         ) {
             // Step indicator
             PremiumStepIndicator(
                 currentStep = uiState.currentStep,
                 labels = uiState.stepLabels,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 0.dp)
             )
 
             // Content — animated transition between steps
@@ -239,6 +243,7 @@ fun CreateRecipeScreenLayout(
                         onCoverImageSelected = onCoverImageSelected,
                         onRemoveCoverImage = onRemoveCoverImage
                     )
+
                     1 -> Step3CookingSteps(
                         uiState = uiState,
                         onAiDescriptionChange = onAiDescriptionChange,
@@ -252,8 +257,10 @@ fun CreateRecipeScreenLayout(
                         onRetryGeneration = onRetryGeneration,
                         onStepMediaSelected = onStepMediaSelected,
                         onRemoveStepMedia = onRemoveStepMedia,
-                        onSkip = onNextStep
+                        onSkip = onNextStep,
+                        onGenerateStepsFromYoutube = onGenerateStepsFromYoutube
                     )
+
                     2 -> Step2Ingredients(
                         ingredients = uiState.ingredients,
                         globalIngredients = uiState.globalIngredients,
@@ -263,6 +270,7 @@ fun CreateRecipeScreenLayout(
                         onRemoveIngredient = onRemoveIngredient,
                         onCreateGlobalIngredient = onCreateGlobalIngredient
                     )
+
                     3 -> Step3Review(
                         uiState = uiState,
                         onSave = onSave
@@ -276,14 +284,15 @@ fun CreateRecipeScreenLayout(
                 // (those stages handle their own actions)
                 // Hide bottom nav during AI loading (step 1 LOADING stage)
                 val showBottomNav = uiState.currentStep != 1 ||
-                    uiState.stepsStage != CreateRecipeUiState.StepsStage.LOADING
+                        uiState.stepsStage != CreateRecipeUiState.StepsStage.LOADING
 
                 if (showBottomNav) {
                     PremiumDivider()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                            .padding(bottom = 0.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (uiState.canGoBack) {
@@ -441,6 +450,7 @@ private fun CreateRecipeStep1Preview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _ -> },
             onSave = {}
         )
     }
@@ -460,9 +470,21 @@ private fun CreateRecipeStep2Preview() {
                     RecipeIngredient("g3", 2.0, "tbsp")
                 ),
                 globalIngredients = listOf(
-                    GlobalIngredient(ingredientId = "g1", name = "Arborio Rice", defaultUnit = "grams"),
-                    GlobalIngredient(ingredientId = "g2", name = "Parmesan Cheese", defaultUnit = "grams"),
-                    GlobalIngredient(ingredientId = "g3", name = "White Truffle Oil", defaultUnit = "tbsp")
+                    GlobalIngredient(
+                        ingredientId = "g1",
+                        name = "Arborio Rice",
+                        defaultUnit = "grams"
+                    ),
+                    GlobalIngredient(
+                        ingredientId = "g2",
+                        name = "Parmesan Cheese",
+                        defaultUnit = "grams"
+                    ),
+                    GlobalIngredient(
+                        ingredientId = "g3",
+                        name = "White Truffle Oil",
+                        defaultUnit = "tbsp"
+                    )
                 )
             ),
             snackbarHostState = remember { SnackbarHostState() },
@@ -479,6 +501,7 @@ private fun CreateRecipeStep2Preview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _ -> },
             onSave = {}
         )
     }
@@ -508,6 +531,7 @@ private fun CreateRecipeStep3Preview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _ -> },
             onSave = {}
         )
     }
@@ -530,13 +554,28 @@ private fun CreateRecipeStep4ReviewPreview() {
                     RecipeIngredient("g3", 2.0, "tbsp")
                 ),
                 globalIngredients = listOf(
-                    GlobalIngredient(ingredientId = "g1", name = "Arborio Rice", defaultUnit = "grams"),
-                    GlobalIngredient(ingredientId = "g2", name = "Parmesan Cheese", defaultUnit = "grams"),
-                    GlobalIngredient(ingredientId = "g3", name = "White Truffle Oil", defaultUnit = "tbsp")
+                    GlobalIngredient(
+                        ingredientId = "g1",
+                        name = "Arborio Rice",
+                        defaultUnit = "grams"
+                    ),
+                    GlobalIngredient(
+                        ingredientId = "g2",
+                        name = "Parmesan Cheese",
+                        defaultUnit = "grams"
+                    ),
+                    GlobalIngredient(
+                        ingredientId = "g3",
+                        name = "White Truffle Oil",
+                        defaultUnit = "tbsp"
+                    )
                 ),
                 steps = listOf(
                     RecipeStep(stepNumber = 1, instructionText = "Heat olive oil in a pan."),
-                    RecipeStep(stepNumber = 2, instructionText = "Add arborio rice and toast for 2 minutes.")
+                    RecipeStep(
+                        stepNumber = 2,
+                        instructionText = "Add arborio rice and toast for 2 minutes."
+                    )
                 )
             ),
             snackbarHostState = remember { SnackbarHostState() },
@@ -553,6 +592,7 @@ private fun CreateRecipeStep4ReviewPreview() {
             onDeleteStep = {}, onMoveStepUp = {}, onMoveStepDown = {},
             onAddManualStep = {}, onRetryGeneration = {},
             onStepMediaSelected = { _, _, _ -> }, onRemoveStepMedia = {},
+            onGenerateStepsFromYoutube = { _ -> },
             onSave = {}
         )
     }

@@ -8,14 +8,17 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -40,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
@@ -51,6 +55,9 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -96,6 +103,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.souschef.util.VoiceToTextParser
@@ -118,7 +126,8 @@ internal fun Step3CookingSteps(
     onRetryGeneration: () -> Unit,
     onStepMediaSelected: (Int, Uri, String) -> Unit,
     onRemoveStepMedia: (Int) -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onGenerateStepsFromYoutube: (url: String) -> Unit
 ) {
     val globalMap = remember(uiState.globalIngredients) {
         uiState.globalIngredients.associateBy { it.ingredientId }
@@ -138,7 +147,8 @@ internal fun Step3CookingSteps(
                 onAiDescriptionChange = onAiDescriptionChange,
                 onGenerateSteps = onGenerateSteps,
                 onAddManualStep = onAddManualStep,
-                onSkip = onSkip
+                onSkip = onSkip,
+                onGenerateStepsFromYoutube = onGenerateStepsFromYoutube
             )
             CreateRecipeUiState.StepsStage.LOADING -> StepsLoadingStage(
                 onCancel = onCancelGeneration
@@ -170,11 +180,34 @@ private fun StepsInputStage(
     onAiDescriptionChange: (String) -> Unit,
     onGenerateSteps: () -> Unit,
     onAddManualStep: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onGenerateStepsFromYoutube: (url: String) -> Unit
 ) {
     val context = LocalContext.current
     val voiceParser = remember { VoiceToTextParser(context.applicationContext as Application) }
     val voiceState by voiceParser.state.collectAsState()
+
+    var expandAiSection by remember { mutableStateOf(false) }
+    var expandYoutubeSection by remember { mutableStateOf(false) }
+    
+    var ytUrl by remember { mutableStateOf("") }
+    var ytLang by remember { mutableStateOf("en") }
+    var showLangDropdown by remember { mutableStateOf(false) }
+    val languageOptions = listOf(
+        "en" to "English",
+        "hi" to "Hindi (हिन्दी)",
+        "es" to "Spanish (Español)",
+        "fr" to "French (Français)",
+        "de" to "German (Deutsch)",
+        "zh" to "Chinese (中文)",
+        "ar" to "Arabic (عربي)",
+        "pt" to "Portuguese (Português)",
+        "ru" to "Russian (Русский)",
+        "ja" to "Japanese (日本語)",
+        "ko" to "Korean (한국어)",
+        "it" to "Italian (Italiano)",
+    )
+    val selectedLangName = languageOptions.find { it.first == ytLang }?.second ?: ytLang
 
     var hasVoicePermission by remember {
         mutableStateOf(
@@ -230,99 +263,236 @@ private fun StepsInputStage(
             }
         }
 
-        // AI generation card
+        // AI generation section
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(),
             shape = CustomShapes.GlassCard,
             colors = CardDefaults.cardColors(containerColor = AppColors.glassBackground()),
             border = BorderStroke(0.5.dp, AppColors.glassBorder())
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "✨ Generate with AI",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AppColors.textPrimary(),
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Describe how you'd cook \"$recipeTitle\" — the AI will break it into precise steps",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.textTertiary()
-                )
-                Spacer(Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = aiDescription,
-                    onValueChange = onAiDescriptionChange,
+            Column {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp),
-                    placeholder = {
-                        Text(
-                            "e.g. Heat oil in a pan, sauté onions until golden, add tomatoes and spices, cook the gravy for 15 minutes…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppColors.textTertiary()
-                        )
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppColors.gold(),
-                        unfocusedBorderColor = AppColors.border(),
-                        focusedLabelColor = AppColors.gold(),
-                        cursorColor = AppColors.gold()
-                    ),
-                    textStyle = MaterialTheme.typography.bodyLarge
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
+                        .clickable { expandAiSection = !expandAiSection }
+                        .padding(20.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        PremiumButton(
-                            text = "Generate Steps with AI",
-                            onClick = onGenerateSteps,
-                            enabled = aiDescription.isNotBlank()
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(if (voiceState.isSpeaking) AppColors.error().copy(alpha = 0.15f) else AppColors.gold().copy(alpha = 0.15f))
-                            .clickable {
-                                if (voiceState.isSpeaking) {
-                                    voiceParser.stopListening()
-                                } else {
-                                    if (hasVoicePermission) {
-                                        voiceParser.startListening()
-                                    } else {
-                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (voiceState.isSpeaking) {
-                            Icon(
-                                Icons.Default.Stop,
-                                contentDescription = "Stop Listening",
-                                tint = AppColors.error(),
-                                modifier = Modifier.size(24.dp)
+                        Text(
+                            text = "✨",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Column {
+                            Text(
+                                text = "Generate with AI",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = AppColors.textPrimary(),
+                                fontWeight = FontWeight.SemiBold
                             )
-                        } else {
-                            Icon(
-                                Icons.Default.Mic,
-                                contentDescription = "Start Voice Input",
-                                tint = AppColors.gold(),
-                                modifier = Modifier.size(24.dp)
+                            Text(
+                                text = "Describe your recipe",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppColors.textTertiary()
                             )
                         }
+                    }
+                    Icon(
+                        imageVector = if (expandAiSection) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Toggle AI Section",
+                        tint = AppColors.textSecondary()
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = expandAiSection,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp)) {
+                        Text(
+                            text = "Describe how you'd cook \"$recipeTitle\" — the AI will break it into precise steps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppColors.textTertiary()
+                        )
+                        Spacer(Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = aiDescription,
+                            onValueChange = onAiDescriptionChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            placeholder = {
+                                Text(
+                                    "e.g. Heat oil in a pan, sauté onions until golden, add tomatoes and spices, cook the gravy for 15 minutes…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = AppColors.textTertiary()
+                                )
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = AppColors.gold(),
+                                unfocusedBorderColor = AppColors.border(),
+                                focusedLabelColor = AppColors.gold(),
+                                cursorColor = AppColors.gold()
+                            ),
+                            textStyle = MaterialTheme.typography.bodyLarge
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                PremiumButton(
+                                    text = "Generate Steps with AI",
+                                    onClick = onGenerateSteps,
+                                    enabled = aiDescription.isNotBlank()
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(if (voiceState.isSpeaking) AppColors.error().copy(alpha = 0.15f) else AppColors.gold().copy(alpha = 0.15f))
+                                    .clickable {
+                                        if (voiceState.isSpeaking) {
+                                            voiceParser.stopListening()
+                                        } else {
+                                            if (hasVoicePermission) {
+                                                voiceParser.startListening()
+                                            } else {
+                                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (voiceState.isSpeaking) {
+                                    Icon(
+                                        Icons.Default.Stop,
+                                        contentDescription = "Stop Listening",
+                                        tint = AppColors.error(),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Mic,
+                                        contentDescription = "Start Voice Input",
+                                        tint = AppColors.gold(),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        PremiumDivider()
+
+        // YouTube import section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(),
+            shape = CustomShapes.GlassCard,
+            colors = CardDefaults.cardColors(containerColor = AppColors.glassBackground()),
+            border = BorderStroke(0.5.dp, AppColors.glassBorder())
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expandYoutubeSection = !expandYoutubeSection }
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = AppColors.gold()
+                        )
+                        Column {
+                            Text(
+                                text = "Add Steps from YouTube",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = AppColors.textPrimary(),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Paste a video URL",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppColors.textTertiary()
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = if (expandYoutubeSection) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Toggle YouTube Section",
+                        tint = AppColors.textSecondary()
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = expandYoutubeSection,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // URL field
+                        OutlinedTextField(
+                            value = ytUrl,
+                            onValueChange = { ytUrl = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("YouTube URL") },
+                            placeholder = {
+                                Text(
+                                    "https://www.youtube.com/watch?v=...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppColors.textTertiary()
+                                )
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = AppColors.gold(),
+                                unfocusedBorderColor = AppColors.border(),
+                                focusedLabelColor = AppColors.gold(),
+                                cursorColor = AppColors.gold()
+                            ),
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+
+                        // Language picker
+
+
+                        PremiumButton(
+                            text = "Generate Steps",
+                            onClick = { onGenerateStepsFromYoutube(ytUrl.trim()) },
+                            enabled = ytUrl.isNotBlank()
+                        )
                     }
                 }
             }
@@ -1164,3 +1334,5 @@ private fun QuantityMultiplierRow(
         )
     }
 }
+
+

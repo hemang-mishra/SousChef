@@ -128,7 +128,16 @@ fun RecipeOverviewContent(
     val recipe = uiState.recipe
 
     if (uiState.isLoading) {
-
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                color = AppColors.gold()
+            )
+        }
         return
     }
 
