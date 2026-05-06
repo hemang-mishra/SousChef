@@ -84,6 +84,9 @@ class CreateRecipeViewModel(
     private val _useMaxServing = MutableStateFlow(false)
     private val _selectedTags = MutableStateFlow<List<RecipeTag>>(emptyList())
     private val _coverImageUri = MutableStateFlow<Uri?>(null)
+    private val _allowSpiceCustomization = MutableStateFlow(true)
+    private val _allowSaltCustomization = MutableStateFlow(true)
+    private val _allowSweetnessCustomization = MutableStateFlow(true)
 
     // ── Step 1: Cooking Steps ────────────────────────────────
     private val _aiDescription = MutableStateFlow("")
@@ -128,6 +131,9 @@ class CreateRecipeViewModel(
             },
             combine(_steps, _stepsStage, _isGeneratingSteps, _newlyCreatedIngredientNames) { steps, stage, generating, newNames ->
                 arrayOf<Any?>(steps, stage, generating, newNames)
+            },
+            combine(_allowSpiceCustomization, _allowSaltCustomization, _allowSweetnessCustomization) { spice, salt, sweet ->
+                arrayOf<Any?>(spice, salt, sweet)
             }
         )
     ) { arrays ->
@@ -137,6 +143,7 @@ class CreateRecipeViewModel(
         val errors = arrays[3]
         val saveData = arrays[4]
         val stepsData = arrays[5]
+        val flavorFlags = arrays[6]
 
         @Suppress("UNCHECKED_CAST")
         CreateRecipeUiState(
@@ -163,7 +170,10 @@ class CreateRecipeViewModel(
             steps = stepsData[0] as List<RecipeStep>,
             stepsStage = stepsData[1] as CreateRecipeUiState.StepsStage,
             isGeneratingSteps = stepsData[2] as Boolean,
-            newlyCreatedIngredientNames = stepsData[3] as List<String>
+            newlyCreatedIngredientNames = stepsData[3] as List<String>,
+            allowSpiceCustomization = flavorFlags[0] as Boolean,
+            allowSaltCustomization = flavorFlags[1] as Boolean,
+            allowSweetnessCustomization = flavorFlags[2] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CreateRecipeUiState())
 
@@ -199,6 +209,9 @@ class CreateRecipeViewModel(
                         }
                         _ingredients.value = recipe.ingredients
                         _remoteCoverImageUrl.value = recipe.coverImageUrl
+                        _allowSpiceCustomization.value = recipe.allowSpiceCustomization
+                        _allowSaltCustomization.value = recipe.allowSaltCustomization
+                        _allowSweetnessCustomization.value = recipe.allowSweetnessCustomization
 
                         // Also load existing steps
                         loadExistingSteps(id)
@@ -313,6 +326,18 @@ class CreateRecipeViewModel(
     fun onRemoveCoverImage() {
         _coverImageUri.value = null
         _remoteCoverImageUrl.value = null
+    }
+
+    fun onAllowSpiceCustomizationChange(allow: Boolean) {
+        _allowSpiceCustomization.value = allow
+    }
+
+    fun onAllowSaltCustomizationChange(allow: Boolean) {
+        _allowSaltCustomization.value = allow
+    }
+
+    fun onAllowSweetnessCustomizationChange(allow: Boolean) {
+        _allowSweetnessCustomization.value = allow
     }
 
     // ── Step 1: Cooking Steps (AI generates steps + ingredients) ──
@@ -661,7 +686,10 @@ class CreateRecipeViewModel(
                     tags = _selectedTags.value.map { it.name },
                     ingredients = _ingredients.value,
                     publish = publish,
-                    coverImageUrl = coverImageUrl
+                    coverImageUrl = coverImageUrl,
+                    allowSpiceCustomization = _allowSpiceCustomization.value,
+                    allowSaltCustomization = _allowSaltCustomization.value,
+                    allowSweetnessCustomization = _allowSweetnessCustomization.value
                 ).collect { result ->
                     when (result) {
                         is Resource.Success -> {
@@ -686,7 +714,10 @@ class CreateRecipeViewModel(
                     ingredients = _ingredients.value,
                     currentUser = currentUser,
                     publish = publish,
-                    coverImageUrl = coverImageUrl
+                    coverImageUrl = coverImageUrl,
+                    allowSpiceCustomization = _allowSpiceCustomization.value,
+                    allowSaltCustomization = _allowSaltCustomization.value,
+                    allowSweetnessCustomization = _allowSweetnessCustomization.value
                 ).collect { result ->
                     when (result) {
                         is Resource.Success -> {

@@ -28,7 +28,10 @@ class CreateRecipeUseCase(
         ingredients: List<RecipeIngredient>,
         currentUser: UserProfile,
         publish: Boolean = false,
-        coverImageUrl: String? = null
+        coverImageUrl: String? = null,
+        allowSpiceCustomization: Boolean = true,
+        allowSaltCustomization: Boolean = true,
+        allowSweetnessCustomization: Boolean = true
     ): Flow<Resource<String>> = flow {
         emit(Resource.loading())
 
@@ -56,6 +59,9 @@ class CreateRecipeUseCase(
             isPublished = publish,
             tags = tags,
             ingredients = processedIngredients,
+            allowSpiceCustomization = allowSpiceCustomization,
+            allowSaltCustomization = allowSaltCustomization,
+            allowSweetnessCustomization = allowSweetnessCustomization,
             createdAt = Timestamp.now(),
             updatedAt = Timestamp.now()
         )

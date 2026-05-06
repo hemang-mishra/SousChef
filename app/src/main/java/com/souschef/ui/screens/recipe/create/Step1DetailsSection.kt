@@ -70,7 +70,10 @@ internal fun Step1Details(
     onMaxServingSizeChange: (Int) -> Unit,
     onToggleTag: (RecipeTag) -> Unit,
     onCoverImageSelected: (Uri) -> Unit,
-    onRemoveCoverImage: () -> Unit
+    onRemoveCoverImage: () -> Unit,
+    onAllowSpiceCustomizationChange: (Boolean) -> Unit = {},
+    onAllowSaltCustomizationChange: (Boolean) -> Unit = {},
+    onAllowSweetnessCustomizationChange: (Boolean) -> Unit = {}
 ) {
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -296,6 +299,34 @@ internal fun Step1Details(
 
         PremiumDivider()
 
+        // Flavor Customization Permissions
+        PremiumSectionHeader(title = "Flavor Customization")
+        Text(
+            "Choose which flavor sliders viewers can adjust on this recipe. Disable a flavor if its balance is essential to the dish.",
+            style = MaterialTheme.typography.bodySmall,
+            color = AppColors.textTertiary()
+        )
+        FlavorCustomizationToggle(
+            label = "🌶  Spice level",
+            subtitle = "Allow viewers to adjust spice intensity",
+            checked = uiState.allowSpiceCustomization,
+            onCheckedChange = onAllowSpiceCustomizationChange
+        )
+        FlavorCustomizationToggle(
+            label = "🧂  Salt level",
+            subtitle = "Allow viewers to adjust saltiness",
+            checked = uiState.allowSaltCustomization,
+            onCheckedChange = onAllowSaltCustomizationChange
+        )
+        FlavorCustomizationToggle(
+            label = "🍯  Sweetness",
+            subtitle = "Allow viewers to adjust sweetness",
+            checked = uiState.allowSweetnessCustomization,
+            onCheckedChange = onAllowSweetnessCustomizationChange
+        )
+
+        PremiumDivider()
+
         // Tags
         PremiumSectionHeader(title = "Tags")
         FlowRow(
@@ -312,6 +343,43 @@ internal fun Step1Details(
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Flavor Customization Toggle
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun FlavorCustomizationToggle(
+    label: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppColors.textPrimary()
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = AppColors.textTertiary()
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = AppColors.gold(),
+                checkedTrackColor = AppColors.gold().copy(alpha = 0.3f),
+                uncheckedThumbColor = AppColors.textTertiary(),
+                uncheckedTrackColor = AppColors.border()
+            )
+        )
     }
 }
 

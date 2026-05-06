@@ -204,4 +204,24 @@ object AppStrings {
 
     fun cancel(language: String): String =
         if (language == SupportedLanguages.HINDI) "रद्द करें" else "Cancel"
+
+    // ── Recipe Overview — Fork ───────────────────────────────────────────
+
+    fun forkRecipe(language: String): String =
+        if (language == SupportedLanguages.HINDI) "रेसिपी फ़ोर्क करें" else "Fork Recipe"
+
+    fun forkingRecipe(language: String): String =
+        if (language == SupportedLanguages.HINDI) "फ़ोर्क हो रहा है…" else "Forking…"
+
+    fun forkSuccess(language: String): String =
+        if (language == SupportedLanguages.HINDI)
+            "रेसिपी की प्रति आपकी पुस्तक में जोड़ी गई"
+        else
+            "Recipe copied to your cookbook"
+
+    fun forkedFromLabel(language: String, originalTitle: String): String =
+        if (language == SupportedLanguages.HINDI)
+            "मूल रेसिपी से फ़ोर्क किया गया: $originalTitle"
+        else
+            "Forked from: $originalTitle"
 }

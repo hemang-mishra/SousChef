@@ -50,7 +50,7 @@ val viewModelModule = module {
 
     // Recipe overview — factory, needs recipeId and currentUser
     factory { (recipeId: String, currentUser: com.souschef.model.auth.UserProfile) ->
-        RecipeOverviewViewModel(get(), get(), get(), get(), get(), get(), recipeId, currentUser.uid)
+        RecipeOverviewViewModel(get(), get(), get(), get(), get(), get(), get(), recipeId, currentUser)
     }
 
     // Cooking mode — factory, needs recipeId + serving/flavour params + Phase 5 dispense deps

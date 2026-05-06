@@ -2,12 +2,14 @@ package com.souschef.ui.screens.recipe.overview
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.souschef.model.auth.UserProfile
 import com.souschef.model.ingredient.GlobalIngredient
 import com.souschef.model.recipe.RecipeIngredient
 import com.souschef.model.recipe.ResolvedIngredient
 import com.souschef.model.recipe.SupportedLanguages
 import com.souschef.repository.ingredient.IngredientRepository
 import com.souschef.repository.recipe.RecipeRepository
+import com.souschef.usecases.recipe.ForkRecipeUseCase
 import com.souschef.usecases.recipe.RecipeCalculationUseCase
 import com.souschef.usecases.translation.TranslateRecipeUseCase
 import com.souschef.util.LanguageManager
@@ -34,11 +36,14 @@ class RecipeOverviewViewModel(
     private val ingredientRepository: IngredientRepository,
     private val calculationUseCase: RecipeCalculationUseCase,
     private val deleteRecipeUseCase: DeleteRecipeUseCase,
+    private val forkRecipeUseCase: ForkRecipeUseCase,
     private val translateRecipeUseCase: TranslateRecipeUseCase,
     private val languageManager: LanguageManager,
     private val recipeId: String,
-    private val currentUserId: String?
+    private val currentUser: UserProfile?
 ) : ViewModel() {
+
+    private val currentUserId: String? = currentUser?.uid?.takeIf { it.isNotBlank() }
 
     private val _uiState = MutableStateFlow(RecipeOverviewUiState())
     val uiState: StateFlow<RecipeOverviewUiState> = _uiState.asStateFlow()
@@ -282,6 +287,45 @@ class RecipeOverviewViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Phase 7 — fork the current recipe under the active user's account.
+     * Emits the new recipeId on [RecipeOverviewUiState.forkedRecipeId] for
+     * the screen to navigate to.
+     */
+    fun onForkRecipe() {
+        val recipe = _uiState.value.recipe ?: return
+        if (currentUser == null) {
+            _uiState.update { it.copy(error = "You need to sign in to fork a recipe") }
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isForking = true, error = null) }
+            forkRecipeUseCase.execute(recipe, currentUser).collect { result ->
+                when (result) {
+                    is Resource.Loading -> { /* keep spinner */ }
+                    is Resource.Failure -> {
+                        _uiState.update {
+                            it.copy(
+                                isForking = false,
+                                error = result.message ?: "Failed to fork recipe"
+                            )
+                        }
+                    }
+                    is Resource.Success -> {
+                        _uiState.update {
+                            it.copy(isForking = false, forkedRecipeId = result.data)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Clears the [RecipeOverviewUiState.forkedRecipeId] after the screen has consumed it. */
+    fun consumeForkedRecipeId() {
+        _uiState.update { it.copy(forkedRecipeId = null) }
     }
 }
 

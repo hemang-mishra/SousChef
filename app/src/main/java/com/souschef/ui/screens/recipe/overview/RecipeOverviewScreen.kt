@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -78,6 +79,7 @@ fun RecipeOverviewScreen(
     onBack: () -> Unit,
     onStartCooking: (selectedServings: Int, spiceLevel: Float, saltLevel: Float, sweetnessLevel: Float) -> Unit,
     onEditRecipe: (String) -> Unit,
+    onForkSuccess: (String) -> Unit = {},
     viewModel: RecipeOverviewViewModel = koinInject()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -85,6 +87,14 @@ fun RecipeOverviewScreen(
     LaunchedEffect(uiState.isDeleted) {
         if (uiState.isDeleted) {
             onBack()
+        }
+    }
+
+    LaunchedEffect(uiState.forkedRecipeId) {
+        val newId = uiState.forkedRecipeId
+        if (!newId.isNullOrBlank()) {
+            viewModel.consumeForkedRecipeId()
+            onForkSuccess(newId)
         }
     }
 
@@ -106,7 +116,8 @@ fun RecipeOverviewScreen(
             )
         },
         onEditRecipe = { uiState.recipe?.let { onEditRecipe(it.recipeId) } },
-        onDeleteRecipe = viewModel::onDeleteRecipe
+        onDeleteRecipe = viewModel::onDeleteRecipe,
+        onForkRecipe = viewModel::onForkRecipe
     )
 }
 
@@ -123,7 +134,8 @@ fun RecipeOverviewContent(
     onSweetnessLevelChanged: (Float) -> Unit,
     onStartCooking: () -> Unit,
     onEditRecipe: () -> Unit,
-    onDeleteRecipe: () -> Unit
+    onDeleteRecipe: () -> Unit,
+    onForkRecipe: () -> Unit = {}
 ) {
     val recipe = uiState.recipe
 
@@ -165,8 +177,10 @@ fun RecipeOverviewContent(
     var showDeleteDialog by remember { mutableStateOf(false) }
     val isCreator = uiState.currentUserId != null && uiState.currentUserId == recipe.creatorId
     val canRetranslate = uiState.language != com.souschef.model.recipe.SupportedLanguages.ENGLISH
+    // Anyone signed in who isn't the creator can fork this recipe.
+    val canFork = uiState.currentUserId != null && !isCreator
     // Show the overflow menu if there is at least one item to put inside it.
-    val showOverflowMenu = isCreator || canRetranslate
+    val showOverflowMenu = isCreator || canRetranslate || canFork
     val lang = uiState.language
 
     if (showDeleteDialog) {
@@ -238,6 +252,28 @@ fun RecipeOverviewContent(
                                     onClick = {
                                         showMenu = false
                                         onRetranslate()
+                                    }
+                                )
+                            }
+                            if (canFork) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (uiState.isForking) AppStrings.forkingRecipe(lang)
+                                            else AppStrings.forkRecipe(lang)
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            androidx.compose.material.icons.Icons.Outlined.ContentCopy,
+                                            contentDescription = null,
+                                            tint = AppColors.gold()
+                                        )
+                                    },
+                                    enabled = !uiState.isForking,
+                                    onClick = {
+                                        showMenu = false
+                                        onForkRecipe()
                                     }
                                 )
                             }
@@ -314,15 +350,23 @@ fun RecipeOverviewContent(
                 }
             )
 
-            FlavorCustomizationCard(
-                spiceLevel = uiState.spiceLevel,
-                saltLevel = uiState.saltLevel,
-                sweetnessLevel = uiState.sweetnessLevel,
-                language = uiState.language,
-                onSpiceLevelChanged = onSpiceLevelChanged,
-                onSaltLevelChanged = onSaltLevelChanged,
-                onSweetnessLevelChanged = onSweetnessLevelChanged
-            )
+            val allowSpice = recipe.allowSpiceCustomization
+            val allowSalt = recipe.allowSaltCustomization
+            val allowSweet = recipe.allowSweetnessCustomization
+            if (allowSpice || allowSalt || allowSweet) {
+                FlavorCustomizationCard(
+                    spiceLevel = uiState.spiceLevel,
+                    saltLevel = uiState.saltLevel,
+                    sweetnessLevel = uiState.sweetnessLevel,
+                    language = uiState.language,
+                    showSpice = allowSpice,
+                    showSalt = allowSalt,
+                    showSweetness = allowSweet,
+                    onSpiceLevelChanged = onSpiceLevelChanged,
+                    onSaltLevelChanged = onSaltLevelChanged,
+                    onSweetnessLevelChanged = onSweetnessLevelChanged
+                )
+            }
 
 			val dispensable = uiState.adjustedIngredients.filter { it.isDispensable }
 			val manual = uiState.adjustedIngredients.filter { !it.isDispensable }
@@ -442,6 +486,34 @@ private fun HeroSection(
                     VerifiedChefBadge()
                 }
             }
+            if (!recipe.originalRecipeId.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.ContentCopy,
+                        contentDescription = null,
+                        tint = AppColors.gold(),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = AppStrings.forkedFromLabel(
+                            language,
+                            recipe.originalRecipeTitle.orEmpty().ifBlank { "original" }
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.92f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }
@@ -529,6 +601,9 @@ private fun FlavorCustomizationCard(
     saltLevel: Float,
     sweetnessLevel: Float,
     language: String = com.souschef.model.recipe.SupportedLanguages.ENGLISH,
+    showSpice: Boolean = true,
+    showSalt: Boolean = true,
+    showSweetness: Boolean = true,
     onSpiceLevelChanged: (Float) -> Unit,
     onSaltLevelChanged: (Float) -> Unit,
     onSweetnessLevelChanged: (Float) -> Unit
@@ -540,6 +615,7 @@ private fun FlavorCustomizationCard(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (showSpice) {
             FlavorSliderRow(
                 label = AppStrings.spice(language),
                 emoji = "🌶",
@@ -564,6 +640,8 @@ private fun FlavorCustomizationCard(
                     else -> Color.Transparent
                 }
             )
+            }
+            if (showSalt) {
             FlavorSliderRow(
                 label = AppStrings.salt(language),
                 emoji = "🧂",
@@ -588,6 +666,8 @@ private fun FlavorCustomizationCard(
                     else -> Color.Transparent
                 }
             )
+            }
+            if (showSweetness) {
             FlavorSliderRow(
                 label = AppStrings.sweetness(language),
                 emoji = "🍯",
@@ -612,6 +692,7 @@ private fun FlavorCustomizationCard(
                     else -> Color.Transparent
                 }
             )
+            }
         }
     }
 }

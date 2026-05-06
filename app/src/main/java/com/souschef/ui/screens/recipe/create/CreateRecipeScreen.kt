@@ -109,6 +109,9 @@ fun CreateRecipeScreen(
         onToggleTag = viewModel::onToggleTag,
         onCoverImageSelected = viewModel::onCoverImageSelected,
         onRemoveCoverImage = viewModel::onRemoveCoverImage,
+        onAllowSpiceCustomizationChange = viewModel::onAllowSpiceCustomizationChange,
+        onAllowSaltCustomizationChange = viewModel::onAllowSaltCustomizationChange,
+        onAllowSweetnessCustomizationChange = viewModel::onAllowSweetnessCustomizationChange,
         // Step 1: Cooking Steps (AI)
         onAiDescriptionChange = viewModel::onAiDescriptionChange,
         onGenerateSteps = viewModel::onGenerateSteps,
@@ -155,6 +158,9 @@ fun CreateRecipeScreenLayout(
     onToggleTag: (RecipeTag) -> Unit,
     onCoverImageSelected: (Uri) -> Unit,
     onRemoveCoverImage: () -> Unit,
+    onAllowSpiceCustomizationChange: (Boolean) -> Unit = {},
+    onAllowSaltCustomizationChange: (Boolean) -> Unit = {},
+    onAllowSweetnessCustomizationChange: (Boolean) -> Unit = {},
     // Step 1: Cooking Steps (AI)
     onAiDescriptionChange: (String) -> Unit,
     onGenerateSteps: () -> Unit,
@@ -241,7 +247,10 @@ fun CreateRecipeScreenLayout(
                         onMaxServingSizeChange = onMaxServingSizeChange,
                         onToggleTag = onToggleTag,
                         onCoverImageSelected = onCoverImageSelected,
-                        onRemoveCoverImage = onRemoveCoverImage
+                        onRemoveCoverImage = onRemoveCoverImage,
+                        onAllowSpiceCustomizationChange = onAllowSpiceCustomizationChange,
+                        onAllowSaltCustomizationChange = onAllowSaltCustomizationChange,
+                        onAllowSweetnessCustomizationChange = onAllowSweetnessCustomizationChange
                     )
 
                     1 -> Step3CookingSteps(

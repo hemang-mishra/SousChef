@@ -36,6 +36,14 @@ data class Recipe(
     val forkCount: Int = 0,
     /** Number of users that have saved/bookmarked this recipe. */
     val savedByCount: Int = 0,
+
+    // ── Flavor customization opt-in flags (creator-controlled) ──────────────
+    /** When true, viewers may adjust the spice level slider on the overview screen. */
+    val allowSpiceCustomization: Boolean = true,
+    /** When true, viewers may adjust the salt level slider on the overview screen. */
+    val allowSaltCustomization: Boolean = true,
+    /** When true, viewers may adjust the sweetness level slider on the overview screen. */
+    val allowSweetnessCustomization: Boolean = true,
     val createdAt: Timestamp = Timestamp.now(),
     val updatedAt: Timestamp = Timestamp.now(),
     val stepCount: Int = 0,

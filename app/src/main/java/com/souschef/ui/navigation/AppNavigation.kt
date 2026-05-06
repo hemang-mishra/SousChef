@@ -332,6 +332,11 @@ fun AppNavigation() {
                         onEditRecipe = { recipeId ->
                             backstack.add(Screens.NavCreateRecipeRoute(recipeId = recipeId))
                         },
+                        onForkSuccess = { newRecipeId ->
+                            // Replace the current overview entry with the forked recipe's overview.
+                            if (backstack.size > 1) backstack.removeAt(backstack.size - 1)
+                            backstack.add(Screens.NavRecipeOverviewRoute(newRecipeId))
+                        },
                         viewModel = viewModel
                     )
                 }

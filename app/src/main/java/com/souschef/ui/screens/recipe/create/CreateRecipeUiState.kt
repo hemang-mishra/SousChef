@@ -31,6 +31,11 @@ data class CreateRecipeUiState(
     val selectedTags: List<RecipeTag> = emptyList(),
     val coverImageUri: Uri? = null,
 
+    // ── Flavor customization opt-in flags (creator-controlled) ──
+    val allowSpiceCustomization: Boolean = true,
+    val allowSaltCustomization: Boolean = true,
+    val allowSweetnessCustomization: Boolean = true,
+
     // ── Step 1: Cooking Steps (AI / Manual) ─────────────────
     val aiDescription: String = "",
     val steps: List<RecipeStep> = emptyList(),

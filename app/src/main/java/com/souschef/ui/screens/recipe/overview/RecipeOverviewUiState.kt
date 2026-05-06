@@ -28,6 +28,12 @@ data class RecipeOverviewUiState(
     // ── Phase 6: Localization ────────────────────────────────────────────────
     val language: String = SupportedLanguages.ENGLISH,
     /** True while the recipe is being translated on demand for [language]. */
-    val isTranslating: Boolean = false
+    val isTranslating: Boolean = false,
+
+    // ── Phase 7: Fork ────────────────────────────────────────────────────────
+    /** True while a fork operation is in flight. */
+    val isForking: Boolean = false,
+    /** New recipeId when a fork has just succeeded; consume by navigating to it. */
+    val forkedRecipeId: String? = null
 )
 

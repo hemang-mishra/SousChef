@@ -25,7 +25,10 @@ class UpdateRecipeUseCase(
         tags: List<String>,
         ingredients: List<RecipeIngredient>,
         publish: Boolean,
-        coverImageUrl: String?
+        coverImageUrl: String?,
+        allowSpiceCustomization: Boolean = true,
+        allowSaltCustomization: Boolean = true,
+        allowSweetnessCustomization: Boolean = true
     ): Flow<Resource<Unit>> = flow {
         emit(Resource.loading())
 
@@ -47,6 +50,9 @@ class UpdateRecipeUseCase(
             "isPublished" to publish,
             "tags" to tags,
             "ingredients" to processedIngredients,
+            "allowSpiceCustomization" to allowSpiceCustomization,
+            "allowSaltCustomization" to allowSaltCustomization,
+            "allowSweetnessCustomization" to allowSweetnessCustomization,
             "updatedAt" to Timestamp.now()
         )
 
